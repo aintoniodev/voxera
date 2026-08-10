@@ -15,10 +15,13 @@ BACKENDS: dict[str, type[Backend]] = {
 }
 
 
-def get_backend(name: str) -> Backend | None:
-    """Return the backend instance for ``name``, or ``None`` if unknown."""
+def get_backend(name: str, **kwargs) -> Backend | None:
+    """Return the backend instance for ``name``, or ``None`` if unknown.
+
+    Extra ``kwargs`` are forwarded to the backend constructor (per-run tuning).
+    """
     cls = BACKENDS.get(name)
-    return cls() if cls is not None else None
+    return cls(**kwargs) if cls is not None else None
 
 
 def list_backends() -> list[str]:

@@ -7,7 +7,7 @@ name = "improve-my-sound"
 version = "0.1.0"
 description = "Voice/podcast post-production CLI (ims) powered by pluggable neural backends."
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["dpdfnet"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]

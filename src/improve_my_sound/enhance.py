@@ -11,7 +11,7 @@ import wave
 from pathlib import Path
 
 from improve_my_sound.backends import get_backend, list_backends
-from improve_my_sound.errors import EnhancementError
+from improve_my_sound.errors import EnhancementError, UnknownBackendError
 
 SUPPORTED_EXTENSIONS = frozenset({".wav"})
 
@@ -44,6 +44,8 @@ def enhance(
     input_path: str | Path,
     output_path: str | Path,
     backend: str = "dpdfnet",
+    model: str | None = None,
+    attn_limit_db: float | None = None,
 ) -> Path:
     """Enhance ``input_path`` and write the improved audio to ``output_path``.
 
@@ -55,6 +57,9 @@ def enhance(
         Where the enhanced audio is written.
     backend:
         Name of the pluggable backend engine (default ``dpdfnet``).
+    model / attn_limit_db:
+        Optional per-run backend tuning (e.g. the autoresearch winner);
+        ``None`` keeps the backend's own defaults.
 
     Returns
     -------
@@ -72,10 +77,17 @@ def enhance(
 
     _validate_input(inp)
 
-    impl = get_backend(backend)
+    kwargs: dict[str, object] = {}
+    if model is not None:
+        kwargs["model"] = model
+    if attn_limit_db is not None:
+        kwargs["attn_limit_db"] = attn_limit_db
+    impl = get_backend(backend, **kwargs)
     if impl is None:
         available = ", ".join(list_backends())
-        raise EnhancementError(f"unknown backend: {backend} (available: {available})")
+        raise UnknownBackendError(
+            f"unknown backend: {backend} (available: {available})"
+        )
 
     impl.enhance(inp, out)
     if not out.exists():

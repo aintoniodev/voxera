@@ -8,3 +8,7 @@ backend implementations.
 
 class EnhancementError(Exception):
     """A user-facing enhancement failure (bad path, format, backend, ...)."""
+
+
+class UnknownBackendError(EnhancementError):
+    """Raised when the requested backend is not registered."""
