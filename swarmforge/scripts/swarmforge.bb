@@ -333,9 +333,13 @@
                             (str "export ORCA_REPO_ID=" (sq rid) " && "))
                           (when-let [rm (System/getenv "ORCA_MAIN")]
                             (str "export ORCA_MAIN=" (sq rm) " && ")))
+        agent-env (str (when-let [p (System/getenv "SWARMFORGE_AGENT_PROVIDER")]
+                         (str "export PI_PROVIDER=" (sq p) " && "))
+                       (when-let [m (System/getenv "SWARMFORGE_AGENT_MODEL")]
+                         (str "export PI_MODEL=" (sq m) " && ")))
         base (str "export SWARMFORGE_ROLE=" (sq role)
                   " && export PATH=" (sq (str role-script-dir)) ":$PATH"
-                  " && " orca-anchors
+                  " && " orca-anchors agent-env
                   "cd " (sq (str role-worktree))
                   " && ")]
     (write-agent-instruction-file! role prompt-file)

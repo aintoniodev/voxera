@@ -26,6 +26,12 @@ export ORCA_REPO_ID="${ORCA_REPO_ID:-fb88f0de-ce39-4263-8407-b99e3a25f064}"
 # 3. native Windows terminal backend (no WSL).
 export SWARMFORGE_TERMINAL=windows-native
 
+# 4. Agent model for the swarm — decoupled from this session's PI_PROVIDER/PI_MODEL
+#    so the swarm doesn't share (and trip) the GLM-5.2 quota. DeepSeek V4 Flash via
+#    opencode-go is cheap, fast, 1M ctx. Override per-launch if desired.
+export SWARMFORGE_AGENT_PROVIDER="${SWARMFORGE_AGENT_PROVIDER:-opencode-go}"
+export SWARMFORGE_AGENT_MODEL="${SWARMFORGE_AGENT_MODEL:-deepseek-v4-flash}"
+
 command -v bb   >/dev/null || { echo "ERROR: bb (babashka) not found on PATH." >&2; exit 1; }
 command -v tmux >/dev/null || { echo "ERROR: tmux (psmux) not found on PATH." >&2; exit 1; }
 command -v orca >/dev/null || { echo "ERROR: orca CLI not found on PATH." >&2; exit 1; }
