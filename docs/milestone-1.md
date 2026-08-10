@@ -1,4 +1,4 @@
-# Milestone 1 — Feature 1 (`ims enhance`) complete + model-selection Pareto in progress
+# Milestone 1 — Feature 1 (`voxera enhance`) complete + model-selection Pareto in progress
 
 **Date:** 2026-08-10 · **Repo:** improve-my-sound · **Brand:** aintonio.dev | Antonio Gómez
 
@@ -9,7 +9,7 @@
    - Agents rerouted from GLM-5.2 (rate-limited, shared with the main session) to **DeepSeek V4 Flash** via opencode-go (`8af5f04`) — zero rate-limit errors since.
    - Specifier → coder → refactorer → architect cycle ran end-to-end on DeepSeek.
 
-2. **Feature 1 — `ims enhance` happy-path CLI (approved spec, 8 Gherkin scenarios):**
+2. **Feature 1 — `voxera enhance` happy-path CLI (approved spec, 8 Gherkin scenarios):**
    - specifier: `features/enhance-cli.feature` (8 scenarios; pruning + ir-dry-checker).
    - coder: `ea36d1b` — core contract (`enhance()`), pluggable backend registry, dpdfnet adapter boundary, validation, acceptance pipeline, 70 unit tests.
    - refactorer: `d18c1e208a` — acceptance pipeline hardening (behavior-preserving).
@@ -23,7 +23,7 @@ Harness: `.auto/` (measure.py: 12 ES+EN noisy clips → PESQ/STOI/SI-SNR + warm 
 
 | Config | pesq | rtf | verdict |
 |---|---|---|---|
-| **DeepFilterNet2 (pf=off)** | **3.275** | **0.084** | **🏆 WINNER → wired as ims default** |
+| **DeepFilterNet2 (pf=off)** | **3.275** | **0.084** | **🏆 WINNER → wired as voxera default** |
 | DeepFilterNet3 (pf=off) | 3.268 | 0.225 | strong |
 | dpdfnet2@attn24 | 2.882 | 0.383 | previous default |
 | dpdfnet8@attn24 | 2.911 | 1.044 | max pesq in dpdfnet |
@@ -41,7 +41,7 @@ Harness: `.auto/` (measure.py: 12 ES+EN noisy clips → PESQ/STOI/SI-SNR + warm 
 
 ## Next
 
-- ~~Wire the autoresearch winner as default~~ ✅ DONE: DeepFilterNet2 (pf=off) wired in `ims` (commit below), models in `models/` (gitignored).
+- ~~Wire the autoresearch winner as default~~ ✅ DONE: DeepFilterNet2 (pf=off) wired in `voxera` (commit below), models in `models/` (gitignored).
 - **GPU is available** (RTX 2060 6GB, CUDA torch 2.11 on system Python): a CUDA pass is an open Pareto dimension (RTF + heavier models). dpdfnet can use `onnxruntime-gpu`; deepfilternet/resemble can use CUDA torch.
 - Evaluate resemble (offline max-quality variant).
 - Tauri desktop shell wrapping the CLI.

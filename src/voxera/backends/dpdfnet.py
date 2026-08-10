@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from improve_my_sound.backends.base import Backend
-from improve_my_sound.errors import EnhancementError
+from voxera.backends.base import Backend
+from voxera.errors import EnhancementError
 
 DEFAULT_MODEL = "dpdfnet2"
 DEFAULT_ATTN_LIMIT_DB = 24.0

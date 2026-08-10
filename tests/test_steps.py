@@ -1,4 +1,4 @@
-"""Step handler tests: the ims acceptance vocabulary."""
+"""Step handler tests: the voxera acceptance vocabulary."""
 
 import os
 import shutil
@@ -59,7 +59,7 @@ class TestRunEnhance:
     def test_run_captures_exit_status(self, tmp_path, monkeypatch):
         monkeypatch.setattr(steps, "TMP_ROOT", tmp_path)
         world = run_step("the input audio file <input>", {"input": "in.wav"})
-        run_step("I run ims enhance <input> -o <output>", {"input": "in.wav", "output": "out.wav"}, world)
+        run_step("I run voxera enhance <input> -o <output>", {"input": "in.wav", "output": "out.wav"}, world)
         run = world["run"]
         assert run["exit"] == 0  # default backend wired -> CLI succeeds
         assert (world["tmp"] / "out.wav").exists()
@@ -68,7 +68,7 @@ class TestRunEnhance:
         monkeypatch.setattr(steps, "TMP_ROOT", tmp_path)
         world = run_step("the input audio file <input>", {"input": "in.wav"})
         run_step(
-            "I run ims enhance <input> -o <output> --backend <backend>",
+            "I run voxera enhance <input> -o <output> --backend <backend>",
             {"input": "in.wav", "output": "out.wav", "backend": "dpdfnet"},
             world,
         )
@@ -78,7 +78,7 @@ class TestRunEnhance:
         monkeypatch.setattr(steps, "TMP_ROOT", tmp_path)
         world = run_step("the input audio file <input>", {"input": "in.wav"})
         run_step(
-            "I run ims enhance <input> -o <output> --backend <backend>",
+            "I run voxera enhance <input> -o <output> --backend <backend>",
             {"input": "in.wav", "output": "out.wav", "backend": "nope"},
             world,
         )
@@ -90,13 +90,13 @@ class TestAssertions:
     def test_exit_status_match(self, tmp_path, monkeypatch):
         monkeypatch.setattr(steps, "TMP_ROOT", tmp_path)
         world = run_step("the input audio file <input>", {"input": "in.wav"})
-        run_step("I run ims enhance <input> -o <output>", {"input": "in.wav", "output": "out.wav"}, world)
+        run_step("I run voxera enhance <input> -o <output>", {"input": "in.wav", "output": "out.wav"}, world)
         run_step("the exit status is <status>", {"status": "0"}, world)
 
     def test_exit_status_mismatch_fails(self, tmp_path, monkeypatch):
         monkeypatch.setattr(steps, "TMP_ROOT", tmp_path)
         world = run_step("the input audio file <input>", {"input": "in.wav"})
-        run_step("I run ims enhance <input> -o <output>", {"input": "in.wav", "output": "out.wav"}, world)
+        run_step("I run voxera enhance <input> -o <output>", {"input": "in.wav", "output": "out.wav"}, world)
         with pytest.raises(AssertionFailure):
             run_step("the exit status is <status>", {"status": "1"}, world)
 
@@ -104,7 +104,7 @@ class TestAssertions:
         monkeypatch.setattr(steps, "TMP_ROOT", tmp_path)
         world = run_step("the input audio file <input>", {"input": "in.wav"})
         run_step(
-            "I run ims enhance <input> -o <output> --backend <backend>",
+            "I run voxera enhance <input> -o <output> --backend <backend>",
             {"input": "in.wav", "output": "out.wav", "backend": "nope"},
             world,
         )
@@ -113,20 +113,20 @@ class TestAssertions:
     def test_command_succeeds_requires_exit_zero(self, tmp_path, monkeypatch):
         monkeypatch.setattr(steps, "TMP_ROOT", tmp_path)
         world = run_step("the input audio file <input>", {"input": "in.wav"})
-        run_step("I run ims enhance <input> -o <output>", {"input": "in.wav", "output": "out.wav"}, world)
+        run_step("I run voxera enhance <input> -o <output>", {"input": "in.wav", "output": "out.wav"}, world)
         run_step("the command succeeds", {}, world)  # exit 0 -> passes now
 
     def test_output_does_not_exist(self, tmp_path, monkeypatch):
         monkeypatch.setattr(steps, "TMP_ROOT", tmp_path)
         world = run_step("the input audio file <input>", {"input": "in.wav"})
-        run_step("I run ims enhance <input> -o <output>", {"input": "in.wav", "output": "out.wav"}, world)
+        run_step("I run voxera enhance <input> -o <output>", {"input": "in.wav", "output": "out.wav"}, world)
         run_step("the output file <output> does not exist", {"output": "never-written.wav"}, world)
 
     def test_stderr_contains(self, tmp_path, monkeypatch):
         monkeypatch.setattr(steps, "TMP_ROOT", tmp_path)
         world = make_world()
         run_step(
-            "I run ims enhance <input> -o <output>",
+            "I run voxera enhance <input> -o <output>",
             {"input": "in.wav", "output": "out.wav"},
             world,
         )
@@ -141,7 +141,7 @@ class TestAssertions:
     def test_invalid_exit_status_value(self, tmp_path, monkeypatch):
         monkeypatch.setattr(steps, "TMP_ROOT", tmp_path)
         world = run_step("the input audio file <input>", {"input": "in.wav"})
-        run_step("I run ims enhance <input> -o <output>", {"input": "in.wav", "output": "out.wav"}, world)
+        run_step("I run voxera enhance <input> -o <output>", {"input": "in.wav", "output": "out.wav"}, world)
         with pytest.raises(InvalidValueError):
             run_step("the exit status is <status>", {"status": "one"}, world)
 

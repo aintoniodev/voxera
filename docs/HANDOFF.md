@@ -17,7 +17,7 @@
 
 ## 2. Estado actual (FUNCIONA)
 
-- **CLI `ims`**: `ims enhance in.wav -o out.wav` → exit 0, wav mejorado.
+- **CLI `voxera`**: `voxera enhance in.wav -o out.wav` → exit 0, wav mejorado.
   - Default: `deepfilternet` (DeepFilterNet2, pf=off) — **ganador del autoresearch** (pesq 3.275, rtf 0.084 CPU).
   - Alternativa: `--backend dpdfnet --model dpdfnet2 --attn-limit-db 24` (pesq 2.88, rtf 0.38).
   - Flags: `--backend`, `--model`, `--attn-limit-db`, `--pf`. Exit codes por spec: happy=0, unknown backend=2, bad path/formato/empty=1, falta -o/input=2.
@@ -33,7 +33,7 @@
 
 ## 3. Decisiones de arquitectura
 
-- Core Python + CLI (terminal-first). Backends pluggables vía registry (`src/improve_my_sound/backends/`).
+- Core Python + CLI (terminal-first). Backends pluggables vía registry (`src/voxera/backends/`).
 - **Selección de modelo EMPÍRICA** (Pareto calidad/RTF sobre test set ES+EN), nunca asumida → ganador: DeepFilterNet2 pf=off.
 - Desktop Tauri planeado: wrappea el CLI como sidecar. El binario Rust `deep-filter` (sin Python) es el candidato natural para el sidecar.
 - GPU soportado (README lo documenta: CUDA torch / onnxruntime-gpu).
@@ -59,7 +59,7 @@
 
 ## 6. Pendientes / candidatos fase 2
 
-- **Rename a voxera**: paquete `improve_my_sound`→`voxera`, CLI `ims`→`voxera`(?), README con tagline, pyproject. (Decidir alcance con el usuario.)
+- ~~**Rename a voxera**~~ ✅ DONE: paquete `improve_my_sound`→`voxera`, CLI `ims`→`voxera`, README con tagline, pyproject.
 - **Tauri desktop shell** (sidecar del CLI; candidato: binario Rust `deep-filter`).
 - **GPU**: torch CUDA en `.venv-ims`, flag `--gpu`, pasada de RTF en GPU.
 - **Re-evaluación con voz real** del usuario (media/test1.wav ya probado subjetivamente → "ha funcionado").
@@ -72,7 +72,7 @@
 ```bash
 cd <proyecto>
 .venv-ims/Scripts/python.exe -m pytest tests/ -q          # 70 passed
-.venv-ims/Scripts/ims enhance media/test1.wav -o out.wav  # exit 0 (si media/ existe)
+.venv-ims/Scripts/voxera enhance media/test1.wav -o out.wav  # exit 0 (si media/ existe)
 git status -s                                             # limpio
 ./launch-swarm.sh                                         # si hace falta el swarm
 ```

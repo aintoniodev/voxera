@@ -1,7 +1,7 @@
-"""The ims command-line interface.
+"""The voxera command-line interface.
 
 The CLI is a thin adapter over the core: it parses arguments, calls
-:func:`improve_my_sound.enhance.enhance`, and maps failures to exit codes and
+:func:`voxera.enhance.enhance`, and maps failures to exit codes and
 stderr messages. All behavior lives in the core so it stays drivable and
 testable from the terminal.
 """
@@ -12,8 +12,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from improve_my_sound.enhance import UnknownBackendError, enhance
-PROG = "ims"
+from voxera.enhance import EnhancementError, UnknownBackendError, enhance
+PROG = "voxera"
 
 
 def build_parser() -> argparse.ArgumentParser:

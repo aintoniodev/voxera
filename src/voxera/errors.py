@@ -1,4 +1,4 @@
-"""Shared error type for the ims core.
+"""Shared error type for the voxera core.
 
 Defined in its own module so the backend adapters can raise it without
 creating an import cycle between ``enhance`` (which routes backends) and the
