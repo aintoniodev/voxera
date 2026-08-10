@@ -18,3 +18,4 @@ tmp/
 
 # model files (downloaded)
 models/
+.venv-re21/
