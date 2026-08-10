@@ -12,7 +12,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from voxera.enhance import UnknownBackendError, enhance
+from voxera.enhance import EnhancementError, UnknownBackendError, enhance
 PROG = "voxera"
 
 
