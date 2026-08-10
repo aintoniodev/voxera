@@ -217,14 +217,9 @@ def _snr_estimate(samples: np.ndarray, mask: np.ndarray, frame_ms: int = 10) -> 
     return {"value": float(np.clip(snr, -10.0, 40.0)), "confidence": confidence}
 
 
-def _breath_detection(samples: np.ndarray, sr: int, mask: np.ndarray) -> int:
-    """Breaths: low-energy, broadband, 1-8 kHz, 100-800 ms, near speech boundaries.
-
-    Envelope-based (the VAD is too coarse at frame level): quiet runs
-    (< -30 dBFS) of 100-800 ms, level in [-55, -30] dBFS, adjacent to speech
-    within 300 ms, whose 1-8 kHz energy dominates the 100-1000 Hz band
-    (broadband — real breaths are; attenuated-speech gaps are not).
-    """
+def breath_regions(samples: np.ndarray, sr: int) -> list[tuple[float, float]]:
+    """Breath regions in seconds: low-energy, broadband 1-8 kHz, 100-800 ms,
+    adjacent to speech (envelope-based — see ``_breath_detection``)."""
     frame_len = sr * 10 // 1000
     env = _frame_rms_db(samples, sr, 10)
     quiet = env < -30.0
@@ -236,7 +231,7 @@ def _breath_detection(samples: np.ndarray, sr: int, mask: np.ndarray) -> int:
         elif not q and start is not None:
             runs.append((start, i - 2))
             start = None
-    count = 0
+    regions: list[tuple[float, float]] = []
     for a, b in runs:
         if not 10 <= (b - a) <= 80:  # 100-800 ms
             continue
@@ -254,24 +249,18 @@ def _breath_detection(samples: np.ndarray, sr: int, mask: np.ndarray) -> int:
             - _band_energy_db(seg, sr, 100.0, 1000.0)
         ) > 0.0
         if broadband:
-            count += 1
-    return count
+            regions.append((a * frame_len / sr, (b + 1) * frame_len / sr))
+    return regions
 
 
-def _click_candidates(samples: np.ndarray, sr: int, mask: np.ndarray) -> dict:
-    """Mouth-click candidates: 5-40 ms transients with a 2-6 kHz spike.
-
-    Detection is local: each 2 ms frame's 2-6 kHz energy vs a rolling median
-    baseline (±250 ms). A 5-40 ms spike above +12 dB is a candidate — in or
-    out of speech, since a 5-40 ms 2-6 kHz burst can be a consonant, a noise
-    burst or a real click (spec Track 1B).
-    """
+def click_regions(samples: np.ndarray, sr: int) -> list[tuple[float, float]]:
+    """Click transient regions in seconds (5-40 ms, 2-6 kHz spike vs local median)."""
     from scipy.ndimage import median_filter
 
     short_len = sr * 2 // 1000
     n_short = len(samples) // short_len
     if n_short < 32:
-        return {"count": 0, "confidence": 0.3}
+        return []
     short = samples[: n_short * short_len].reshape(n_short, short_len).astype(np.float64)
     spec = np.abs(np.fft.rfft(short, axis=1)) ** 2
     freqs = np.fft.rfftfreq(short_len, 1.0 / sr)
@@ -279,38 +268,54 @@ def _click_candidates(samples: np.ndarray, sr: int, mask: np.ndarray) -> dict:
     band_energy = 10.0 * np.log10(spec[:, band].sum(axis=1) + 1e-30)
     baseline = median_filter(band_energy, size=251, mode="nearest")
     spikes = (band_energy - baseline > 12.0) & (band_energy > -50.0)
-    events: list[int] = []
-    run_len = 0
-    for flag in np.concatenate([[False], spikes, [False]]):
-        if flag:
-            run_len += 1
-        elif run_len:
-            ms = run_len * 2
+    regions: list[tuple[float, float]] = []
+    run_start: int | None = None
+    for i, flag in enumerate(np.concatenate([spikes, [False]])):
+        if flag and run_start is None:
+            run_start = i
+        elif not flag and run_start is not None:
+            ms = (i - run_start) * 2
             if 5 <= ms <= 40:
-                events.append(ms)
-            run_len = 0
-    confidence = float(np.clip(0.3 + 0.05 * len(events), 0.3, 0.9))
-    return {"count": len(events), "confidence": confidence}
+                regions.append(
+                    (run_start * short_len / sr, i * short_len / sr)
+                )
+            run_start = None
+    return regions
 
 
-def _plosive_candidates(samples: np.ndarray, sr: int, mask: np.ndarray) -> dict:
-    """Plosives (P/B/T): low-frequency bursts (<150 Hz, 10-50 ms) at word onsets."""
+def plosive_regions(samples: np.ndarray, sr: int, mask: np.ndarray) -> list[tuple[float, float]]:
+    """Plosive onset regions in seconds (burst <150 Hz at speech onsets)."""
     frame_len = sr * 10 // 1000
     mask10 = _mask_to_10ms(mask, len(samples) // frame_len)
-    count = 0
-    total_excess = 0.0
+    regions: list[tuple[float, float]] = []
     for start, end in _speech_runs(mask10):
         onset = samples[start * frame_len : min((start + 5) * frame_len, len(samples))]
         if len(onset) < frame_len:
             continue
         lf = _band_energy_db(onset, sr, 20.0, 150.0)
         mid = _band_energy_db(onset, sr, 150.0, 1000.0)
-        excess = lf - mid
-        if excess > 6.0:
-            count += 1
-            total_excess += excess
-    confidence = 0.0 if count == 0 else float(np.clip(0.4 + 0.05 * (total_excess / count), 0.4, 0.9))
-    return {"candidates": count, "confidence": confidence}
+        if lf - mid > 6.0:
+            regions.append((start * frame_len / sr, min((start + 5) * frame_len, len(samples)) / sr))
+    return regions
+
+
+def _breath_detection(samples: np.ndarray, sr: int, mask: np.ndarray) -> int:
+    """Number of breath candidates (see :func:`breath_regions`)."""
+    return len(breath_regions(samples, sr))
+
+
+def _click_candidates(samples: np.ndarray, sr: int, mask: np.ndarray) -> dict:
+    """Mouth-click candidates (see :func:`click_regions`)."""
+    events = click_regions(samples, sr)
+    confidence = float(np.clip(0.3 + 0.05 * len(events), 0.3, 0.9))
+    return {"count": len(events), "confidence": confidence}
+
+
+def _plosive_candidates(samples: np.ndarray, sr: int, mask: np.ndarray) -> dict:
+    """Plosive candidates (see :func:`plosive_regions`)."""
+    regions = plosive_regions(samples, sr, mask)
+    confidence = 0.0 if not regions else float(np.clip(0.4 + 0.1 * len(regions), 0.4, 0.9))
+    return {"candidates": len(regions), "confidence": confidence}
 
 
 def _noise_type(samples: np.ndarray, sr: int, mask: np.ndarray, hum: dict) -> dict:

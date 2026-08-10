@@ -17,10 +17,11 @@ dependencies = [
     "pedalboard",
     "pyloudnorm",
     "webrtcvad-wheels",
+    "resemblyzer",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "pesq", "pystoi"]
 
 [project.scripts]
 voxera = "voxera.cli:main"

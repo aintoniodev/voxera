@@ -407,3 +407,75 @@ def when_run_enhance_no_input(text, params, example, world):
     (output_name,) = params.values()
     output_path = _path_for(world, output_name)
     _run_ims(["enhance", "-o", str(output_path)], world)
+
+
+@REGISTRY.register(r"^the input audio file <([A-Za-z0-9_]+)> has long gaps$")
+def given_input_long_gaps(text, params, example, world):
+    """Speech 1s + gap 2s + speech 1s + gap 1.2s + speech 1s (Track 2 fixture)."""
+    import soundfile as sf
+
+    import tests.synth as s
+
+    (filename,) = params.values()
+    path = _path_for(world, filename)
+    sf.write(str(path), s.long_gaps(), 48000, subtype="PCM_16")
+    world["paths"][filename] = path
+
+
+@REGISTRY.register(r"^the input audio file <([A-Za-z0-9_]+)> is speech-like clipped$")
+def given_input_clipped(text, params, example, world):
+    """Speech-like signal hard-clipped at 0.95 (restore --declip fixture)."""
+    import numpy as np
+    import soundfile as sf
+
+    import tests.synth as s
+
+    (filename,) = params.values()
+    path = _path_for(world, filename)
+    x = np.clip(s.speech_like(2.0) * 3.0, -0.95, 0.95).astype(np.float32)
+    sf.write(str(path), x, 48000, subtype="PCM_16")
+    world["paths"][filename] = path
+
+
+@REGISTRY.register(r"^I run voxera score <([A-Za-z0-9_]+)>$")
+def when_run_score(text, params, example, world):
+    """Run `voxera score <input>` (TTY summary)."""
+    (input_name,) = params.values()
+    input_path = world["paths"].get(input_name, _path_for(world, input_name))
+    _run_ims(["score", str(input_path)], world)
+
+
+@REGISTRY.register(r"^I run voxera score <([A-Za-z0-9_]+)> --ref <([A-Za-z0-9_]+)> --format json$")
+def when_run_score_ref(text, params, example, world):
+    """Run `voxera score <input> --ref <ref> --format json`."""
+    input_name, ref_name = params.values()
+    input_path = world["paths"].get(input_name, _path_for(world, input_name))
+    ref_path = world["paths"].get(ref_name, _path_for(world, ref_name))
+    _run_ims(["score", str(input_path), "--ref", str(ref_path), "--format", "json"], world)
+
+
+@REGISTRY.register(r"^I run voxera silence <([A-Za-z0-9_]+)> -o <([A-Za-z0-9_]+)> --level <([A-Za-z0-9_]+)>$")
+def when_run_silence(text, params, example, world):
+    """Run `voxera silence <input> -o <output> --level <level>`."""
+    input_name, output_name, level = params.values()
+    input_path = world["paths"].get(input_name, _path_for(world, input_name))
+    output_path = _path_for(world, output_name)
+    _run_ims(["silence", str(input_path), "-o", str(output_path), "--level", level], world)
+
+
+@REGISTRY.register(r"^I run voxera restore <([A-Za-z0-9_]+)> -o <([A-Za-z0-9_]+)> --declip$")
+def when_run_restore_declip(text, params, example, world):
+    """Run `voxera restore <input> -o <output> --declip`."""
+    input_name, output_name = params.values()
+    input_path = world["paths"].get(input_name, _path_for(world, input_name))
+    output_path = _path_for(world, output_name)
+    _run_ims(["restore", str(input_path), "-o", str(output_path), "--declip"], world)
+
+
+@REGISTRY.register(r"^I run voxera restore <([A-Za-z0-9_]+)> -o <([A-Za-z0-9_]+)>$")
+def when_run_restore_noop(text, params, example, world):
+    """Run `voxera restore <input> -o <output>` without stages (usage error)."""
+    input_name, output_name = params.values()
+    input_path = world["paths"].get(input_name, _path_for(world, input_name))
+    output_path = _path_for(world, output_name)
+    _run_ims(["restore", str(input_path), "-o", str(output_path)], world)

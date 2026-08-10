@@ -6,6 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 import soundfile as sf
 
@@ -246,3 +247,78 @@ class TestEnhancePipeline:
         proc = run_cli("analyze", "--help")
         assert proc.returncode == 0
         assert "--format" in proc.stdout
+
+
+class TestScoreCommand:
+    def test_score_tty(self, tmp_path):
+        audio = write_48k(tmp_path / "in.wav", s.speech_like(2.0))
+        proc = run_cli("score", str(audio))
+        assert proc.returncode == 0
+        assert "Voice Score" in proc.stdout
+        assert "Dynamics" in proc.stdout
+
+    def test_score_json_with_ref(self, tmp_path):
+        audio = write_48k(tmp_path / "in.wav", s.speech_like(2.0))
+        proc = run_cli("score", str(audio), "--ref", str(audio), "--format", "json")
+        assert proc.returncode == 0
+        report = json.loads(proc.stdout)
+        assert report["score"]["cvs"] >= 0
+        assert report["voice_preservation_pct"] > 99.0
+
+    def test_score_missing_ref_exits_1(self, tmp_path):
+        audio = write_48k(tmp_path / "in.wav", s.speech_like(1.0))
+        proc = run_cli("score", str(audio), "--ref", str(tmp_path / "nope.wav"))
+        assert proc.returncode == 1
+
+
+class TestSilenceCommand:
+    def test_silence_trims_and_reports(self, tmp_path):
+        audio = write_48k(tmp_path / "in.wav", s.long_gaps())
+        out = tmp_path / "out.wav"
+        proc = run_cli("silence", str(audio), "-o", str(out), "--level", "medium")
+        assert proc.returncode == 0
+        assert "cleaned" in proc.stdout
+        info = sf.info(str(out))
+        assert info.samplerate == 48000 and info.subtype == "PCM_24"
+
+    def test_silence_silent_input_exits_20(self, tmp_path):
+        audio = write_48k(tmp_path / "sil.wav", s.silence(1.0))
+        proc = run_cli("silence", str(audio), "-o", str(tmp_path / "o.wav"))
+        assert proc.returncode == 20
+
+    def test_silence_help(self):
+        proc = run_cli("silence", "--help")
+        assert proc.returncode == 0
+        assert "--breaths" in proc.stdout and "--declick" in proc.stdout
+
+
+class TestRestoreCommand:
+    def test_restore_declip(self, tmp_path):
+        x = np.clip(s.speech_like(2.0) * 3.0, -0.95, 0.95).astype(np.float32)
+        audio = write_48k(tmp_path / "in.wav", x)
+        out = tmp_path / "out.wav"
+        proc = run_cli("restore", str(audio), "-o", str(out), "--declip")
+        assert proc.returncode == 0
+        assert "declip" in proc.stdout
+        info = sf.info(str(out))
+        assert info.samplerate == 48000 and info.subtype == "PCM_24"
+
+    def test_restore_no_op_exits_1(self, tmp_path):
+        audio = write_48k(tmp_path / "in.wav", s.speech_like(1.0))
+        proc = run_cli("restore", str(audio), "-o", str(tmp_path / "o.wav"))
+        assert proc.returncode == 1
+        assert "at least one of" in proc.stderr
+
+    def test_restore_help(self):
+        proc = run_cli("restore", "--help")
+        assert proc.returncode == 0
+        assert "--deplosive" in proc.stdout
+
+
+class TestInspectCommand:
+    def test_inspect_prints_recommendation(self, tmp_path):
+        audio = write_48k(tmp_path / "in.wav", s.speech_like(2.0))
+        proc = run_cli("inspect", str(audio))
+        assert proc.returncode == 0
+        assert "Recommendation" in proc.stdout
+        assert "Loudness:" in proc.stdout
