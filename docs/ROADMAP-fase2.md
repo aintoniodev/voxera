@@ -36,21 +36,22 @@ Fundaciones congeladas en la spec (Track 1A): input 16/22.05/44.1/48 kHz mono/st
 
 ## Tracks (orden de implementación)
 
-### 🟢 Track 0 — Rename a `voxera` *(en curso, PR → master)*
+### ✅ Track 0 — Rename a `voxera` *(hecho — PR #1 mergeado)*
 `improve_my_sound`/`ims` → `voxera` (paquete, CLI, pyproject, features, tests, docs).
-Tras merge: reinstalar `pip install -e .` desde master.
+Pendiente: reinstalar `pip install -e .` desde master — el editable de `.venv-ims` apuntaba
+al worktree de rename (ya borrado) y `voxera` no importa.
 
 ### 🟢 Track 1A — Fundaciones: audio I/O + format policy + device + determinismo + SLA
 Política de sample rates / bit depth / stereo→mono (energía promedio, sin clipping),
-A/V sync ≤ 10 ms, determinismo (JSON estable para CI), device policy, **tres RTF
-separados** (model / pipeline / e2e), metadata/provenance en reports.
+A/V sync ≤ 10 ms, determinismo (JSON estable para CI), device policy, **cuatro RTF
+separados** (model / pipeline / e2e / master), metadata/provenance en reports.
 
 ### 🟢 Track 1 — `voxera analyze` + `voxera master`: pipeline DSP alrededor de DF2 *(alto valor, bajo riesgo)*
 1. `voxera analyze in.wav` → JSON/TTY con **confidence** en estimaciones: duración, VAD
    (voz/silencio), LUFS-I/LUFS-S/LRA/RMS/true peak, clipping, SNR, rumble/hum/mud/
    boxiness/presence/air, RT60, DC offset, plosives, breaths, mouth_click_candidates,
    **noise type** (heurístico).
-2. Pipeline post-denoise en `src/improve_my_sound/dsp/` (pyloudnorm + pedalboard),
+2. Pipeline post-denoise en `src/voxera/dsp/` (pyloudnorm + pedalboard),
    orden congelado: DC removal → high-pass 70 Hz (LR24) → dehum* → EQ vocal (mud
    100–300, boxiness 300–600, presence 2–5k, air 8–14k, ≤±4 dB) → de-esser (max 6 dB)
    → compresor suave → limiter -1 dBTP → loudnorm -14 LUFS.
@@ -108,7 +109,7 @@ El CLI genera todo (wavs A/B, JSON); A/B player standalone se reutiliza en Track
 ## Orden de implementación
 
 ```
-Track 0 (rename, en curso) → Track 1A (fundaciones) → Track 1 (analyze+master, +1B)
+Track 0 (rename, hecho) → Track 1A (fundaciones) → Track 1 (analyze+master, +1B)
 → Track 3 (score) → Track 2 (silence/boca) → Track 4 (vídeo) → Track 6 (benchmark v2)
 → Track 8 (humano) → Track 5 (restoration) → Track 7 (Tauri)
 ```
@@ -120,13 +121,13 @@ validación "escucha + métrica" desde el día 1; la evaluación humana necesita
 
 ## Decisiones abiertas para Antonio
 
-Resumen (12 en total, detalle en `docs/SPECS-fase2.md`):
+Resumen (12 en total — 1 resuelta, 11 abiertas; detalle en `docs/SPECS-fase2.md`):
 
 1. ¿`creator` como preset por defecto de `enhance --preset`? (propuesto: sí, -16 LUFS)
 2. ¿Target LUFS de `social` = -14 confirmado? (TikTok/IG reales)
 3. ¿Puedes grabar 10–30 clips reales para benchmark v2 (mic/phone/room/fan/AC)?
-4. ¿Renombrar el repo a `voxera` o mantener `improve-my-sound` como repo y `voxera`
-   como paquete/marca?
+4. ~~¿Renombrar el repo a `voxera` o mantener `improve-my-sound` como repo y `voxera`
+   como paquete/marca?~~ ✅ **resuelta** — el repo ya es `aintoniodev/voxera`.
 5. De-esser: max att 6 dB, ¿tolerancia 5% en energía 2–5 kHz?
 6. ¿Exit code `VOXERA_NO_SPEECH = 20`?
 7. ¿SLA RTF: CPU <0.5 / CUDA <0.1 / master <0.01?

@@ -6,7 +6,7 @@
 > Gherkin (`features/*.feature`) cuando se implemente cada track.
 >
 > Regla de oro del proyecto: **todo drivable desde terminal** (CLI = héroe).
-> `ims` → `voxera` tras el rename (Track 0).
+> `ims` → `voxera` (rename hecho — Track 0).
 >
 > **v2 de la spec (2026-08):** se añaden las *fundaciones* que faltaban —
 > políticas de audio I/O (sample rate / bit depth / sync), determinismo,
@@ -61,7 +61,7 @@ INPUT ──► ANALYZE ──► ENHANCE ──► VOICE DSP ──► MASTER �
 
 ## Track 0 — Rename `improve_my_sound`/`ims` → `voxera`
 
-**Estado: en curso** (delegado a subagente en worktree `.worktrees/voxera-rename`, PR → master).
+**Estado: hecho** (PR #1 mergeado en master).
 
 | Ámbito | Cambio |
 |---|---|
@@ -72,8 +72,8 @@ INPUT ──► ANALYZE ──► ENHANCE ──► VOICE DSP ──► MASTER �
 | tests / acceptance | imports y nombres de comando |
 | README + docs | comandos y nombres |
 
-**Criterios:** 70/70 tests con el nombre nuevo; `voxera enhance` exit 0; `ims` ya no existe en `.venv-ims/Scripts`; PR abierto.
-**Riesgo:** el venv editable apunta al worktree hasta el merge → tras merge, reinstalar `pip install -e .` desde master.
+**Criterios:** 70/70 tests con el nombre nuevo; `voxera enhance` exit 0; `ims` ya no existe en `.venv-ims/Scripts`; PR #1 mergeado.
+**Riesgo (pendiente):** el editable de `.venv-ims` apuntaba al worktree de rename (ya borrado) → reinstalar `pip install -e .` desde master.
 
 ---
 
@@ -86,6 +86,7 @@ Fundación de audio engineering que congelamos **antes** de tocar el pipeline (e
 | Etapa | Política |
 |---|---|
 | **Input** | WAV 16 / 22.05 / 44.1 / 48 kHz · mono/stereo. Fuera de rango → error claro con el valor leído. |
+| **Input vídeo** | Cualquier sample rate del audio extraído — se resamplea a 48 kHz (Track 4). |
 | **Internal** | **48 kHz, mono** para enhancement (resample con calidad soxr). |
 | **Output WAV** | 48 kHz. |
 | **Output vídeo** | Stream de vídeo original + audio 48 kHz (Track 4). |
@@ -118,7 +119,7 @@ Same input + same backend + same parameters
 
 - **DSP (master)**: byte-equivalent — pipeline sin NN debe ser reproducible al byte.
 - **NN (enhance)**: `--seed` fijo; en CPU objetivo sample-equivalent; en CUDA fijar seed y **documentar** si hay non-determinism (no prometer byte-equivalent donde no lo hay).
-- **JSON de analyze/score**: estable para CI — claves ordenadas, floats redondeados a precisión fija, sin UUIDs ni timestamps variables.
+- **JSON de analyze/score**: estable para CI — claves ordenadas, floats redondeados a precisión fija, sin UUIDs ni timestamps variables. Única excepción: `processing_time_s` (bloque `system`), que se reporta pero se excluye del diff de estabilidad.
 
 ### GPU/CPU device policy
 
@@ -134,7 +135,7 @@ RTF:    0.071 (model)
 
 ### Performance budget (SLA)
 
-Se miden y reportan **tres RTF separados** — el RTF del modelo solo engaña:
+Se miden y reportan **cuatro RTF separados** — el RTF del modelo solo engaña:
 
 | Nivel | Qué mide | SLA propuesto *(confirmar)* |
 |---|---|---|
@@ -163,7 +164,7 @@ Cada report JSON (`analyze`, `score`) incluye el bloque `system`:
 }
 ```
 
-**Criterios de aceptación:** política de formatos aplicada en todos los comandos; resample 44.1→48 validado en fixture; JSON byte-estable entre dos ejecuciones con mismo input; `--dry-run` no escribe OUT; exit 20 en fixture sin voz; bloque `system` presente en todo report.
+**Criterios de aceptación:** política de formatos aplicada en todos los comandos; resample 44.1→48 validado en fixture; JSON byte-estable entre dos ejecuciones con mismo input (excepto `processing_time_s`); `--dry-run` no escribe OUT; exit 20 en fixture sin voz; bloque `system` presente en todo report.
 
 **Riesgo:** determinismo CUDA no garantizable al 100% → documentar en vez de prometer.
 
@@ -288,7 +289,7 @@ Expected:
 
 - **auto-select backend** (futuro, con `analyze` + `noise_type`): heavy noise → DF2 (default); clipping+low-BW → aviso "usa restoration (track 5)"; reverb alto → aviso dereverb.
 
-**Criterios de aceptación:** exit 0; out WAV válido (48 kHz / 24-bit); `LUFS_out ∈ target ±1`; `true peak ≤ -1 dBTP`; duración conservada ±0.1 s; banda 100–300 Hz atenuada ≥2 dB en mud-heavy fixture; `|mean(samples)| < -60 dBFS` (DC); determinismo byte-equivalent en DSP; tests unitarios por etapa DSP (filtro, comp, límite, loudnorm, de-esser); JSON estable entre ejecuciones.
+**Criterios de aceptación:** exit 0; out WAV válido (48 kHz / 24-bit); `LUFS_out ∈ target ±1`; `true peak ≤ -1 dBTP`; duración conservada ±0.1 s; banda 100–300 Hz atenuada ≥2 dB en mud-heavy fixture; `|mean(samples)| < -60 dBFS` (DC); determinismo byte-equivalent en DSP; tests unitarios por etapa DSP (filtro, comp, límite, loudnorm, de-esser); JSON estable entre ejecuciones (excepto `processing_time_s`).
 **Libs:** `pedalboard` (EQ/comp/limiter), `pyloudnorm` (LUFS), `webrtcvad-wheels` (VAD). Instalar en `.venv-ims`.
 **Riesgos:** pedalboard en Windows 3.11 (wheels OK); no destruir la voz (compresión suave, EQ ≤±4 dB, de-esser max 6 dB); validación subjetiva con voz real del usuario (media/test1.wav).
 
@@ -537,7 +538,7 @@ Track 0 (rename) → Track 1A (fundaciones I/O + determinismo + device)
 | 1 | ¿`creator` como preset por defecto de `enhance --preset`? | `creator`, -16 LUFS | abierta |
 | 2 | ¿Target LUFS de `social`: -14 (TikTok/IG reales) confirmado? | -14 | abierta |
 | 3 | ¿Voz real para benchmark v2: puede grabar 10–30 clips (mic, phone, room, fan, AC)? | sí | abierta |
-| 4 | ¿Renombrar el repo a `voxera` o mantener `improve-my-sound` como repo? | paquete/marca voxera | abierta |
+| 4 | ~~¿Renombrar el repo a `voxera` o mantener `improve-my-sound` como repo?~~ | repo ya renombrado (`aintoniodev/voxera`) | ✅ resuelta |
 | 5 | De-esser: umbral por preset, max att **6 dB**, tolerancia energía 2–5 kHz (**X = 5%**?) | 5% | abierta |
 | 6 | Exit codes: rango estable — ¿`VOXERA_NO_SPEECH = 20`? | 20 | abierta |
 | 7 | SLA RTF: CPU **< 0.5**, CUDA **< 0.1**, master **< 0.01** | sí | abierta |
