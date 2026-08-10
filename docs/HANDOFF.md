@@ -33,7 +33,7 @@
 
 ## 3. Decisiones de arquitectura
 
-- Core Python + CLI (terminal-first). Backends pluggables vía registry (`src/improve_my_sound/backends/`).
+- Core Python + CLI (terminal-first). Backends pluggables vía registry (`src/voxera/backends/`).
 - **Selección de modelo EMPÍRICA** (Pareto calidad/RTF sobre test set ES+EN), nunca asumida → ganador: DeepFilterNet2 pf=off.
 - Desktop Tauri planeado: wrappea el CLI como sidecar. El binario Rust `deep-filter` (sin Python) es el candidato natural para el sidecar.
 - GPU soportado (README lo documenta: CUDA torch / onnxruntime-gpu).
@@ -59,7 +59,7 @@
 
 ## 6. Pendientes / candidatos fase 2
 
-- **Rename a voxera**: paquete `improve_my_sound`→`voxera`, CLI `ims`→`voxera`(?), README con tagline, pyproject. (Decidir alcance con el usuario.)
+- ~~**Rename a voxera**~~ ✅ DONE: paquete `improve_my_sound`→`voxera`, CLI `ims`→`voxera`, README con tagline, pyproject.
 - **Tauri desktop shell** (sidecar del CLI; candidato: binario Rust `deep-filter`).
 - **GPU**: torch CUDA en `.venv-ims`, flag `--gpu`, pasada de RTF en GPU.
 - **Re-evaluación con voz real** del usuario (media/test1.wav ya probado subjetivamente → "ha funcionado").
