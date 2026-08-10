@@ -4,3 +4,15 @@
 
 # pi agent local state
 .pi/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+
+# Build artifacts (acceptance pipeline + project-local temp)
+build/
+acceptance/generated/
+tmp/
