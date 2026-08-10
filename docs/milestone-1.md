@@ -40,6 +40,7 @@ Harness: `.auto/` (measure.py: 12 ES+EN noisy clips → PESQ/STOI/SI-SNR + warm 
 ## Next
 
 - Wire the autoresearch-confirmed winner as the `ims` default (likely deepfilternet via the Rust binary — Tauri-sidecar-friendly).
+- **GPU is available** (RTX 2060 6GB, CUDA torch 2.11 on system Python): the autoresearch venv ran torch CPU, so a CUDA pass is an open Pareto dimension (RTF + heavier models). dpdfnet can use `onnxruntime-gpu`; deepfilternet/resemble can use CUDA torch.
 - Evaluate resemble (offline max-quality variant).
 - Tauri desktop shell wrapping the CLI.
 - Real-voice re-evaluation (no-reference UTMOS/DNSMOS) once the brand owner's audio is available.
