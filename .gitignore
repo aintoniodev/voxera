@@ -1,0 +1,6 @@
+# SwarmForge runtime state (per-machine)
+.swarmforge/
+.worktrees/
+
+# pi agent local state
+.pi/
