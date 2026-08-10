@@ -55,7 +55,7 @@ INPUT ──► ANALYZE ──► ENHANCE ──► VOICE DSP ──► MASTER �
 | `0` | OK |
 | `1` | Error de procesamiento (EnhancementError) |
 | `2` | Error de uso / backend desconocido |
-| `20` | **`VOXERA_NO_SPEECH`**: VAD speech ratio < 5% → "No speech detected". `enhance`/`master` abortan sin intentar masterizar como voz; `analyze`/`inspect` siguen funcionando (solo análisis). |
+| `20` | **`VOXERA_NO_SPEECH`**: VAD speech ratio < 5% → "No speech detected". `master` y `enhance` con pipeline (`--preset`/`--dsp-only`) abortan sin intentar masterizar como voz; `analyze`/`inspect` siguen funcionando (solo análisis). El `enhance` legacy sin preset (solo backend) queda sin gate — back-compat explícito. |
 
 ---
 
@@ -78,6 +78,10 @@ INPUT ──► ANALYZE ──► ENHANCE ──► VOICE DSP ──► MASTER �
 ---
 
 ## Track 1A — Audio I/O, format policy, device, determinismo, SLA *(nuevo)*
+
+**Estado: hecho (fase 2, 2026-08).** Módulos: `audioio.py` (política + downmix + soxr + PCM_24),
+`device.py`, `determinism.py` (JSON estable + provenance), `vad.py` (webrtcvad 30 ms, exit 20).
+RTF separados (model/pipeline/e2e/master) medidos y reportados en `--verbose`.
 
 Fundación de audio engineering que congelamos **antes** de tocar el pipeline (evita casos raros con 44.1 kHz, estéreo, bit depths, etc.).
 
@@ -171,6 +175,12 @@ Cada report JSON (`analyze`, `score`) incluye el bloque `system`:
 ---
 
 ## Track 1 — `voxera analyze` + `voxera master` (pipeline DSP + presets)
+
+**Estado: hecho (fase 2, 2026-08).** `voxera analyze` (report completo con confidence),
+`voxera master` (pipeline congelado + presets + `--no-*`/`--lufs`/`--dehum`), `enhance
+--preset/--dsp-only/--dry-run`. Features Gherkin: `features/{enhance,master,analyze}-cli.feature`
+(28 escenarios APS verdes). Acceptance verificado: LUFS ±1, TP ≤ -1 dBTP, duración ±0.1 s,
+DC < -60 dBFS, mud ≥2 dB, byte-equivalente, de-esser no-daño.
 
 **Objetivo:** el corazón del pivot — la voz sale con calidad de vídeo, no solo sin ruido.
 
@@ -296,6 +306,11 @@ Expected:
 ---
 
 ## Track 1B — Vocal DSP specification *(nuevo)*
+
+**Estado: hecho (fase 2, 2026-08).** De-esser 4-10 kHz max 6 dB atk 1 ms rel 75 ms con criterio
+no-daño 2-5 kHz ≤5% (test en CI); breaths por envolvente (quiet 100-800 ms, -55..-30 dBFS,
+broadband 1-8k, junto a frontera); plosives (burst <150 Hz en onset); hum 50/100/150 vs rumble;
+DC offset; noise-type 11 tipos heurísticos. En `src/voxera/analyze.py` + `src/voxera/dsp/`.
 
 Especificación detallada de las etapas de voz. **Heurísticas primero, medibles y sustituibles** — luego se pueden reemplazar por modelos (RT60 proxy, noise_type, mouth_click_candidates, plosives) sin romper la arquitectura.
 
@@ -535,15 +550,15 @@ Track 0 (rename) → Track 1A (fundaciones I/O + determinismo + device)
 
 | # | Decisión | Propuesta | Estado |
 |---|---|---|---|
-| 1 | ¿`creator` como preset por defecto de `enhance --preset`? | `creator`, -16 LUFS | abierta |
+| 1 | ~~¿`creator` como preset por defecto de `enhance --preset`?~~ | `creator`, -16 LUFS | ✅ resuelta (implementado) |
 | 2 | ¿Target LUFS de `social`: -14 (TikTok/IG reales) confirmado? | -14 | abierta |
 | 3 | ¿Voz real para benchmark v2: puede grabar 10–30 clips (mic, phone, room, fan, AC)? | sí | abierta |
 | 4 | ~~¿Renombrar el repo a `voxera` o mantener `improve-my-sound` como repo?~~ | repo ya renombrado (`aintoniodev/voxera`) | ✅ resuelta |
-| 5 | De-esser: umbral por preset, max att **6 dB**, tolerancia energía 2–5 kHz (**X = 5%**?) | 5% | abierta |
-| 6 | Exit codes: rango estable — ¿`VOXERA_NO_SPEECH = 20`? | 20 | abierta |
-| 7 | SLA RTF: CPU **< 0.5**, CUDA **< 0.1**, master **< 0.01** | sí | abierta |
-| 8 | Salidas: WAV **PCM 24-bit**, MP4 **AAC 192 kbps** (¿o 256?) | 192 | abierta |
-| 9 | Breaths: **preservar por defecto**; `--breaths attenuate\|remove` explícito | preservar | abierta |
-| 10 | Taxonomía noise type (11 tipos heurísticos) ¿OK? | sí | abierta |
+| 5 | ~~De-esser: umbral por preset, max att 6 dB, tolerancia 2-5 kHz (5%)~~ | 5% | ✅ resuelta (implementado, test CI) |
+| 6 | ~~Exit codes: `VOXERA_NO_SPEECH = 20`~~ | 20 | ✅ resuelta (implementado: master + enhance con pipeline) |
+| 7 | SLA RTF: CPU **< 0.5**, CUDA **< 0.1**, master **< 0.01** | sí | ◐ medido y reportado en `--verbose`; umbrales sin enforce |
+| 8 | ~~Salidas: WAV PCM 24-bit, MP4 AAC 192 kbps~~ | 192 | ✅ resuelta (24-bit implementado; AAC con Track 4) |
+| 9 | ~~Breaths: preservar por defecto~~; `--breaths` explícito | preservar | ✅ resuelta (detección hecha; flag con Track 2) |
+| 10 | ~~Taxonomía noise type (11 tipos heurísticos)~~ | sí | ✅ resuelta (implementada en `analyze`) |
 | 11 | ¿De-plosive y dehum en Track 5 o postergar más? | track 5 | abierta |
 | 12 | Evaluación humana: ¿quiénes (5–10 personas), cuántos clips (10–20), umbral ≥60%? | sí | abierta |

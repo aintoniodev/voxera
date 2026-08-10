@@ -38,34 +38,37 @@ Fundaciones congeladas en la spec (Track 1A): input 16/22.05/44.1/48 kHz mono/st
 
 ### ✅ Track 0 — Rename a `voxera` *(hecho — PR #1 mergeado)*
 `improve_my_sound`/`ims` → `voxera` (paquete, CLI, pyproject, features, tests, docs).
-Pendiente: reinstalar `pip install -e .` desde master — el editable de `.venv-ims` apuntaba
-al worktree de rename (ya borrado) y `voxera` no importa.
+✅ Verificado en fase 2: editable de `.venv-ims` funcional (`voxera` importa desde `src/`), 150 tests.
 
-### 🟢 Track 1A — Fundaciones: audio I/O + format policy + device + determinismo + SLA
-Política de sample rates / bit depth / stereo→mono (energía promedio, sin clipping),
-A/V sync ≤ 10 ms, determinismo (JSON estable para CI), device policy, **cuatro RTF
-separados** (model / pipeline / e2e / master), metadata/provenance en reports.
+### ✅ Track 1A — Fundaciones: audio I/O + format policy + device + determinismo + SLA *(hecho)*
+Política de sample rates (16/22.05/44.1/48 kHz mono/stereo → interno 48 kHz mono, downmix
+`0.5·(L+R)` energía, resample soxr), salida WAV **PCM 24-bit**, determinismo (JSON estable para
+CI: claves ordenadas + floats fijos, única excepción `processing_time_s`; DSP byte-equivalente),
+device policy `--device auto|cpu|cuda`, RTF separados (model/pipeline/e2e/master) medidos y
+reportados en `--verbose`, bloque `system` de provenance (voxera_version, backend/model,
+model_hash, device, seed, preset, sample_rate). Exit 20 `VOXERA_NO_SPEECH` implementado
+(gate en `master` y `enhance` con pipeline; el `enhance` legacy sin preset queda sin gate —
+back-compat explícito de la spec).
 
-### 🟢 Track 1 — `voxera analyze` + `voxera master`: pipeline DSP alrededor de DF2 *(alto valor, bajo riesgo)*
-1. `voxera analyze in.wav` → JSON/TTY con **confidence** en estimaciones: duración, VAD
-   (voz/silencio), LUFS-I/LUFS-S/LRA/RMS/true peak, clipping, SNR, rumble/hum/mud/
-   boxiness/presence/air, RT60, DC offset, plosives, breaths, mouth_click_candidates,
-   **noise type** (heurístico).
-2. Pipeline post-denoise en `src/voxera/dsp/` (pyloudnorm + pedalboard),
-   orden congelado: DC removal → high-pass 70 Hz (LR24) → dehum* → EQ vocal (mud
-   100–300, boxiness 300–600, presence 2–5k, air 8–14k, ≤±4 dB) → de-esser (max 6 dB)
-   → compresor suave → limiter -1 dBTP → loudnorm -14 LUFS.
-3. Presets de voz: `--preset creator|youtube|podcast|social|bad-room`.
-4. `voxera enhance --preset X` → **siempre** DF2 + pipeline completo; `--dsp-only` =
-   master puro; `--dry-run` = plan sin procesar.
-- Libs: `pedalboard` (EQ/comp/limiter, wheels Windows), `pyloudnorm` (LUFS).
+### ✅ Track 1 — `voxera analyze` + `voxera master`: pipeline DSP alrededor de DF2 *(hecho)*
+1. `voxera analyze in.wav` → JSON/TTY con **confidence** (duración, LUFS-I/S/LRA/RMS/TP,
+   clipping, VAD, SNR, rumble/hum 50/100/150/mud/boxiness/presence/air, RT60, DC, plosives,
+   breaths, mouth_click_candidates, noise type heurístico). `--format tty|json`, `-o report.json`.
+2. Pipeline post-denoise en `src/voxera/dsp/` (pyloudnorm + pedalboard + scipy/numpy),
+   orden congelado: DC removal → high-pass 70 Hz (LR24) → [dehum] → EQ vocal (≤±4 dB)
+   → de-esser (max 6 dB) → compresor → limiter -1 dBTP → loudnorm + guard TP.
+3. Presets: `creator|youtube|podcast|social|bad-room` (parámetros congelados).
+4. `voxera enhance --preset X` → **siempre** backend + pipeline; `--dsp-only` = master puro;
+   `--dry-run` = plan `VOXERA PLAN` sin escribir ni cargar NN.
+- Acceptance verificado: LUFS ±1, TP ≤ -1 dBTP, duración ±0.1 s, DC < -60 dBFS, mud ≥2 dB,
+  byte-equivalente, de-esser no-daño 2-5 kHz ≤5%, features Gherkin (28 escenarios APS verdes).
 
-### 📋 Track 1B — Spec DSP vocal (se implementa dentro de Track 1)
-De-esser con criterios de no-daño (no degradar >5% energía 2–5 kHz), breath detection
-(no es transitorio: low-energy/broadband/1–8 kHz/100–800 ms, preservar por defecto),
-plosives candidates, hum 50/100/150 Hz vs rumble, DC offset, noise-type taxonomy
-(11 tipos heurísticos, schema preparado para IA). **Heurísticas primero, medibles y
-sustituibles** — nada de ML por ahora.
+### ✅ Track 1B — Spec DSP vocal *(hecho, dentro de Track 1)*
+De-esser con criterio de no-daño (≤5% energía 2-5 kHz en CI), breath detection por envolvente
+(quiet 100-800 ms, nivel -55..-30 dBFS, 1-8k ≫ 100-1k, junto a frontera de voz; preservar por
+defecto), plosives candidates (burst <150 Hz en onset), hum 50/100/150 vs rumble, DC offset,
+noise-type taxonomy (11 tipos heurísticos, schema preparado para IA). **Heurísticas primero,
+medibles y sustituibles** — nada de ML por ahora.
 
 ### 🟡 Track 2 — VAD + limpieza de silencio + boca/aire
 `voxera silence --level light|medium|aggressive [--breaths preserve|attenuate|remove]`:
@@ -121,18 +124,18 @@ validación "escucha + métrica" desde el día 1; la evaluación humana necesita
 
 ## Decisiones abiertas para Antonio
 
-Resumen (12 en total — 1 resuelta, 11 abiertas; detalle en `docs/SPECS-fase2.md`):
+Resumen (12 en total — **7 resueltas**, 5 abiertas; detalle en `docs/SPECS-fase2.md`):
 
-1. ¿`creator` como preset por defecto de `enhance --preset`? (propuesto: sí, -16 LUFS)
-2. ¿Target LUFS de `social` = -14 confirmado? (TikTok/IG reales)
+1. ✅ ~~¿`creator` como preset por defecto de `enhance --preset`?~~ **sí, -16 LUFS** (implementado)
+2. ¿Target LUFS de `social` = -14 confirmado? (TikTok/IG reales) — implementado a -14 a falta de confirmar
 3. ¿Puedes grabar 10–30 clips reales para benchmark v2 (mic/phone/room/fan/AC)?
 4. ~~¿Renombrar el repo a `voxera` o mantener `improve-my-sound` como repo y `voxera`
    como paquete/marca?~~ ✅ **resuelta** — el repo ya es `aintoniodev/voxera`.
-5. De-esser: max att 6 dB, ¿tolerancia 5% en energía 2–5 kHz?
-6. ¿Exit code `VOXERA_NO_SPEECH = 20`?
-7. ¿SLA RTF: CPU <0.5 / CUDA <0.1 / master <0.01?
-8. ¿WAV 24-bit + AAC 192 kbps (o 256)?
-9. ¿Breaths preservados por defecto (`--breaths` explícito para atenuar/eliminar)?
-10. ¿Taxonomía noise type de 11 tipos heurísticos OK?
+5. ✅ ~~De-esser: max att 6 dB, ¿tolerancia 5% en energía 2–5 kHz?~~ **5% implementado** (test en CI)
+6. ✅ ~~¿Exit code `VOXERA_NO_SPEECH = 20`?~~ **20 implementado** (gate en master + enhance con pipeline)
+7. ¿SLA RTF: CPU <0.5 / CUDA <0.1 / master <0.01? — **medido y reportado** en `--verbose`; umbrales sin enforce
+8. ✅ ~~¿WAV 24-bit + AAC 192 kbps (o 256)?~~ **24-bit + 192 confirmado** (AAC se aplica en Track 4)
+9. ✅ ~~¿Breaths preservados por defecto?~~ **sí** — el reporte los cuenta; el flag `--breaths` llega con Track 2
+10. ✅ ~~¿Taxonomía noise type de 11 tipos heurísticos OK?~~ **implementada** (`analyze` → artifacts.noise_type)
 11. ¿De-plosive y dehum en Track 5 o postergar más?
 12. Evaluación humana: ¿quiénes (5–10 personas), cuántos clips (10–20), umbral ≥60%?

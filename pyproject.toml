@@ -4,10 +4,20 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "voxera"
-version = "0.1.0"
+version = "0.2.0"
 description = "Voice/podcast post-production CLI (voxera) powered by pluggable neural backends."
 requires-python = ">=3.10"
-dependencies = ["dpdfnet", "deepfilternet"]
+dependencies = [
+    "dpdfnet",
+    "deepfilternet",
+    "numpy",
+    "soundfile",
+    "soxr",
+    "scipy",
+    "pedalboard",
+    "pyloudnorm",
+    "webrtcvad-wheels",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
