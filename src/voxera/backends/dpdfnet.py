@@ -23,19 +23,32 @@ class DpdfNetBackend(Backend):
     name = "dpdfnet"
 
     def __init__(
-        self, model: str = DEFAULT_MODEL, attn_limit_db: float = DEFAULT_ATTN_LIMIT_DB
+        self,
+        model: str = DEFAULT_MODEL,
+        attn_limit_db: float = DEFAULT_ATTN_LIMIT_DB,
+        seed: int | None = None,
     ) -> None:
         self.model = model
         self.attn_limit_db = attn_limit_db
+        self.seed = seed
 
     def enhance(self, input_path: Path, output_path: Path) -> Path:
         try:
+            import numpy as np
             import dpdfnet
             import soundfile as sf
         except ImportError as exc:
             raise EnhancementError(
                 "backend 'dpdfnet' is unavailable: install the 'dpdfnet' package"
             ) from exc
+        if self.seed is not None:
+            np.random.seed(self.seed)
+            try:
+                import torch
+
+                torch.manual_seed(self.seed)
+            except ImportError:
+                pass
         try:
             audio, sr = sf.read(str(input_path), dtype="float32", always_2d=False)
             if audio.ndim > 1:

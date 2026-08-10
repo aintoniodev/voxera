@@ -23,9 +23,10 @@ class DeepFilterNetBackend(Backend):
 
     name = "deepfilternet"
 
-    def __init__(self, model: str = "DeepFilterNet2", pf: bool = False) -> None:
+    def __init__(self, model: str = "DeepFilterNet2", pf: bool = False, seed: int | None = None) -> None:
         self.model = model
         self.pf = pf
+        self.seed = seed
 
     def _resolve_model_dir(self) -> str | None:
         """Return an explicit model dir, or None to let the df package auto-resolve."""
@@ -47,6 +48,9 @@ class DeepFilterNetBackend(Backend):
             raise EnhancementError(
                 "backend 'deepfilternet' is unavailable: install 'deepfilternet' and torch"
             ) from exc
+        if self.seed is not None:
+            torch.manual_seed(self.seed)
+            np.random.seed(self.seed)
         try:
             audio, sr = sf.read(str(input_path), dtype="float32", always_2d=False)
             if audio.ndim > 1:
