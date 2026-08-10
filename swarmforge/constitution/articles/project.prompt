@@ -1,15 +1,45 @@
-# Project Rules
+# Project Rules — improve-my-sound
 
-## Project Shape
-- This project is configured for SwarmForge with four Codex-backed agents: specifier, coder, refactorer, and architect.
-- Project language: Babashka.
+## What we build
+"improve-my-sound" (brand: aintonio.dev | Antonio Gómez) is a voice/podcast
+post-production tool powered by a neural network. Hero: pass your (rough/noisy)
+voice audio in, get professionally-enhanced audio out. Target users: content
+creators and podcasters; the brand owner is an AI Engineer running a 30-day
+content challenge (the first video launches this product).
 
-## Local Configuration
-- Preserve project-local SwarmForge configuration under `swarmforge/`.
-- Keep swarm state local under `.swarmforge/`, worktrees under `.worktrees/`, and shared scripts under `swarmforge/scripts/`.
+## Architecture (decided)
+- **Core**: a Python package + CLI named `ims` (e.g. `ims enhance <input> -o <output>`).
+  The core is the source of truth and the primary interface.
+- **Backends are pluggable**: `--backend {deepfilternet|dpdfnet|resemble}`. The
+  neural-network engine is swappable; model/param selection is driven by measured
+  Pareto quality-vs-RTF (see Metrics). Whichever backend wins plugs into the same
+  `enhance()` contract — do NOT hard-couple to one model.
+- **Desktop (later, out of scope for first features)**: a Tauri (Rust) app wrapping
+  the CLI as a sidecar. Keep the core decoupled so Tauri can call it as a subprocess.
+- **Premise (non-negotiable)**: everything must be drivable from the terminal so the
+  AI agent can edit, run and tweak it all. No functionality that exists only behind
+  a GUI. The CLI is the hero interface.
+
+## Languages & layout
+- Python for the core (`src/improve_my_sound/`, console entry `ims`). Rust only later
+  for the Tauri shell.
+- Unit tests: pytest. Acceptance specs: Gherkin `.feature` files via the APS pipeline.
+
+## Metrics (how we choose backends/params)
+- Quality (no-reference, computable on real voice): **UTMOS** and **DNSMOS** (SIG/OVRL).
+- Cost: **RTF** (real-time factor) and CPU vs GPU footprint.
+- Evaluated on a public test set with **Spanish/Castilian + English** clips.
+- Selection target: Pareto front of quality vs RTF (model choice is empirical, not assumed).
 
 ## Handoffs
-- Prefer terse, explicit handoffs that report state and request role-appropriate review. Do not include verifications or sender process narrative.
+- Terse, explicit; report state + request role-appropriate review. No process narrative.
 
 ## Ownership
-- Do not change another role's prompt or workflow ownership without explicit user direction.
+- Do not edit another role's prompt or workflow ownership without explicit user direction.
+
+## Current work
+- **Feature 1 (in progress)**: happy-path end-to-end CLI — `ims enhance <input.wav>
+  -o <output.wav>` loads an audio file, runs ONE pluggable backend's enhancement, and
+  writes the improved file. Define the backend-agnostic `enhance()` contract, then wire
+  ONE concrete backend (default `dpdfnet`) to prove the path end-to-end. Error/edge
+  cases (bad path, unsupported format, empty audio) are explicit scenarios.
