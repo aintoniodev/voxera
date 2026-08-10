@@ -11,8 +11,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from improve_my_sound.backends.base import Backend
-from improve_my_sound.errors import EnhancementError
+from voxera.backends.base import Backend
+from voxera.errors import EnhancementError
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 MODELS_DIR = PROJECT_ROOT / "models"

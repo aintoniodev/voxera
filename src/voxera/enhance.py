@@ -10,8 +10,8 @@ from __future__ import annotations
 import wave
 from pathlib import Path
 
-from improve_my_sound.backends import get_backend, list_backends
-from improve_my_sound.errors import EnhancementError, UnknownBackendError
+from voxera.backends import get_backend, list_backends
+from voxera.errors import EnhancementError, UnknownBackendError
 
 SUPPORTED_EXTENSIONS = frozenset({".wav"})
 

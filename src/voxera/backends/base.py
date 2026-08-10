@@ -1,4 +1,4 @@
-"""Backend contract for the ims enhancement engine.
+"""Backend contract for the voxera enhancement engine.
 
 Backends are pluggable neural-network engines. The core only depends on this
 contract; model/parameter selection is an empirical decision driven by measured
@@ -25,5 +25,5 @@ class Backend(ABC):
         """Enhance ``input_path`` and write the result to ``output_path``.
 
         Returns ``output_path`` on success. Raises :class:`EnhancementError`
-        (from ``improve_my_sound.enhance``) on failure.
+        (from ``voxera.enhance``) on failure.
         """

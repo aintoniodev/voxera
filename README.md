@@ -1,6 +1,6 @@
 # improve-my-sound
 
-Voice/podcast post-production CLI (`ims`) powered by pluggable neural backends.
+Voice/podcast post-production CLI (`voxera`) powered by pluggable neural backends.
 Brand: **aintonio.dev | Antonio Gómez** — an AI Engineer's 30-day content challenge product.
 
 > Hero: pass your rough/noisy voice audio in → get professionally-enhanced audio out.
@@ -12,10 +12,10 @@ Brand: **aintonio.dev | Antonio Gómez** — an AI Engineer's 30-day content cha
 uv venv --python 3.11 .venv-ims && uv pip install -p .venv-ims -e .
 
 # enhance a file
-.venv-ims/Scripts/ims enhance in.wav -o out.wav   # default backend (deepfilternet, Pareto winner)
+.venv-ims/Scripts/voxera enhance in.wav -o out.wav   # default backend (deepfilternet, Pareto winner)
 # tune the backend
-.venv-ims/Scripts/ims enhance in.wav -o out.wav --backend dpdfnet --model dpdfnet2 --attn-limit-db 24
-.venv-ims/Scripts/ims enhance in.wav -o out.wav --backend deepfilternet --model DeepFilterNet3 --pf
+.venv-ims/Scripts/voxera enhance in.wav -o out.wav --backend dpdfnet --model dpdfnet2 --attn-limit-db 24
+.venv-ims/Scripts/voxera enhance in.wav -o out.wav --backend deepfilternet --model DeepFilterNet3 --pf
 
 # GPU (opcional): instala los runtimes CUDA — pip install onnxruntime-gpu, o un build de torch con CUDA
 ```
@@ -35,7 +35,7 @@ Model/param selection is **empirical** (Pareto quality-vs-RTF on an ES+EN benchm
 ## Architecture
 
 ```
-src/improve_my_sound/   enhance() contract, backend registry, CLI
+src/voxera/   enhance() contract, backend registry, CLI
 acceptance/             APS Gherkin acceptance pipeline (parse→dry-check→generate→run)
 tests/                  70 pytest unit tests
 swarmforge/             SwarmForge four-pack (specifier→coder→refactorer→architect)
@@ -47,7 +47,7 @@ swarmforge/             SwarmForge four-pack (specifier→coder→refactorer→a
 
 ## Status
 
-- **Feature 1** (`ims enhance` happy-path CLI): ✅ complete — all 8 spec scenarios verified (exit codes per spec), 70 tests pass.
+- **Feature 1** (`voxera enhance` happy-path CLI): ✅ complete — all 8 spec scenarios verified (exit codes per spec), 70 tests pass.
 - **Model selection**: ✅ autoresearch verdict — **DeepFilterNet2 (pf=off) is the default** (pesq 3.28, rtf 0.08; 22 configs swept).
 - **Next**: Tauri desktop shell; real-voice re-evaluation (UTMOS/DNSMOS no-reference); GPU RTF pass (CUDA torch).
 
