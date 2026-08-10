@@ -329,9 +329,14 @@
                           (:script-dir ctx)
                           (fs/path role-worktree "swarmforge" "scripts"))
         prompt-file (fs/path (:prompts-dir ctx) (str role ".md"))
+        orca-anchors (str (when-let [rid (System/getenv "ORCA_REPO_ID")]
+                            (str "export ORCA_REPO_ID=" (sq rid) " && "))
+                          (when-let [rm (System/getenv "ORCA_MAIN")]
+                            (str "export ORCA_MAIN=" (sq rm) " && ")))
         base (str "export SWARMFORGE_ROLE=" (sq role)
                   " && export PATH=" (sq (str role-script-dir)) ":$PATH"
-                  " && cd " (sq (str role-worktree))
+                  " && " orca-anchors
+                  "cd " (sq (str role-worktree))
                   " && ")]
     (write-agent-instruction-file! role prompt-file)
     (cond-> (str base
