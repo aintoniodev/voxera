@@ -1,0 +1,10 @@
+"""Shared error type for the ims core.
+
+Defined in its own module so the backend adapters can raise it without
+creating an import cycle between ``enhance`` (which routes backends) and the
+backend implementations.
+"""
+
+
+class EnhancementError(Exception):
+    """A user-facing enhancement failure (bad path, format, backend, ...)."""
