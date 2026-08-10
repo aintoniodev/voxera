@@ -51,19 +51,19 @@ class TestEnhanceCommand:
         assert proc.returncode == 1
         assert "invalid wav" in proc.stderr
 
-    def test_unknown_backend_exits_1(self, tmp_path):
+    def test_unknown_backend_exits_2(self, tmp_path):
         audio = write_wav(tmp_path / "in.wav")
         proc = run_cli(
             "enhance", str(audio), "-o", str(tmp_path / "out.wav"), "--backend", "bogus"
         )
-        assert proc.returncode == 1
+        assert proc.returncode == 2
         assert "unknown backend" in proc.stderr
 
-    def test_default_backend_fails_cleanly(self, tmp_path):
+    def test_default_backend_produces_output(self, tmp_path):
         audio = write_wav(tmp_path / "in.wav")
         proc = run_cli("enhance", str(audio), "-o", str(tmp_path / "out.wav"))
-        assert proc.returncode == 1
-        assert "dpdfnet" in proc.stderr
+        assert proc.returncode == 0
+        assert (tmp_path / "out.wav").exists()
 
     def test_missing_output_flag_exits_2(self, tmp_path):
         audio = write_wav(tmp_path / "in.wav")

@@ -7,6 +7,7 @@ import pytest
 
 from improve_my_sound.backends import BACKENDS, get_backend, list_backends
 from improve_my_sound.backends.base import Backend
+from improve_my_sound.backends.dpdfnet import DpdfNetBackend
 from improve_my_sound.enhance import EnhancementError, enhance
 
 
@@ -103,10 +104,12 @@ class TestEnhanceRouting:
         with pytest.raises(EnhancementError, match="did not produce output"):
             enhance(audio, tmp_path / "out.wav", backend="nowrite")
 
-    def test_default_backend_is_dpdfnet(self, tmp_path):
-        audio = write_wav(tmp_path / "in.wav")
-        with pytest.raises(EnhancementError, match="dpdfnet"):
-            enhance(audio, tmp_path / "out.wav")
+    def test_default_backend_is_dpdfnet(self):
+        backend = get_backend("dpdfnet")
+        assert isinstance(backend, DpdfNetBackend)
+        assert backend.name == "dpdfnet"
+        assert backend.model == "dpdfnet2"  # Pareto-informed real-time default
+        assert backend.attn_limit_db == 24.0
 
 
 class TestRegistry:
@@ -122,7 +125,8 @@ class TestRegistry:
         assert list_backends() == sorted(list_backends())
         assert "dpdfnet" in list_backends()
 
-    def test_dpdfnet_adapter_clear_error(self, tmp_path):
+    def test_dpdfnet_adapter_produces_output(self, tmp_path):
         audio = write_wav(tmp_path / "in.wav")
-        with pytest.raises(EnhancementError, match="dpdfnet"):
-            enhance(audio, tmp_path / "out.wav", backend="dpdfnet")
+        out = enhance(audio, tmp_path / "out.wav", backend="dpdfnet")
+        assert out.exists()
+        assert out.stat().st_size > 0

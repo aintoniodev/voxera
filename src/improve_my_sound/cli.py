@@ -12,7 +12,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from improve_my_sound.enhance import EnhancementError, enhance
+from improve_my_sound.enhance import UnknownBackendError, enhance
 PROG = "ims"
 
 
@@ -38,6 +38,17 @@ def build_parser() -> argparse.ArgumentParser:
         default="dpdfnet",
         help="enhancement backend (default: dpdfnet); the core validates the name",
     )
+    enhance_parser.add_argument(
+        "--model",
+        default=None,
+        help="backend model override (default: backend's own default)",
+    )
+    enhance_parser.add_argument(
+        "--attn-limit-db",
+        type=float,
+        default=None,
+        help="dpdfnet attenuation limit in dB (default: 24)",
+    )
     return parser
 
 
@@ -52,6 +63,9 @@ def main(argv: list[str] | None = None) -> int:
                 Path(args.output),
                 backend=args.backend,
             )
+        except UnknownBackendError as exc:
+            print(f"{PROG}: error: {exc}", file=sys.stderr)
+            return 2
         except EnhancementError as exc:
             print(f"{PROG}: error: {exc}", file=sys.stderr)
             return 1
