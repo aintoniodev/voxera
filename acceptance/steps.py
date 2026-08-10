@@ -1,4 +1,4 @@
-"""Project step handlers: connect Gherkin step text to the ims CLI.
+"""Project step handlers: connect Gherkin step text to the voxera CLI.
 
 Handlers follow the APS recommended style: regex patterns capture placeholder
 names, and the runtime fetches each name from the current example object.
@@ -68,11 +68,11 @@ def _write_sine_wav(path: Path, seconds: float = 1.0, rate: int = 8000) -> None:
 
 
 def _ims_command() -> list[str]:
-    """Resolve the ims CLI command: installed ``ims`` or the module fallback."""
-    installed = shutil.which("ims")
+    """Resolve the voxera CLI command: installed ``voxera`` or the module fallback."""
+    installed = shutil.which("voxera")
     if installed:
         return [installed]
-    return [sys.executable, "-m", "improve_my_sound.cli"]
+    return [sys.executable, "-m", "voxera.cli"]
 
 
 def _python_path() -> str:
@@ -100,7 +100,7 @@ def _run_ims(args: list[str], world: dict) -> None:
 def _require_run(world: dict) -> dict:
     run = world.get("run")
     if run is None:
-        raise AssertionFailure("no ims command has been run in this scenario")
+        raise AssertionFailure("no voxera command has been run in this scenario")
     return run
 
 
@@ -129,9 +129,9 @@ def given_empty_audio(text, params, example, world):
     world["paths"][filename] = path
 
 
-@REGISTRY.register(r"^I run ims enhance <([A-Za-z0-9_]+)> -o <([A-Za-z0-9_]+)>$")
+@REGISTRY.register(r"^I run voxera enhance <([A-Za-z0-9_]+)> -o <([A-Za-z0-9_]+)>$")
 def when_run_enhance(text, params, example, world):
-    """Run `ims enhance <input> -o <output>` and capture its outcome."""
+    """Run `voxera enhance <input> -o <output>` and capture its outcome."""
     input_name, output_name = params.values()
     input_path = world["paths"].get(input_name, _path_for(world, input_name))
     output_path = _path_for(world, output_name)
@@ -142,10 +142,10 @@ def when_run_enhance(text, params, example, world):
 
 
 @REGISTRY.register(
-    r"^I run ims enhance <([A-Za-z0-9_]+)> -o <([A-Za-z0-9_]+)> --backend <([A-Za-z0-9_]+)>$"
+    r"^I run voxera enhance <([A-Za-z0-9_]+)> -o <([A-Za-z0-9_]+)> --backend <([A-Za-z0-9_]+)>$"
 )
 def when_run_enhance_backend(text, params, example, world):
-    """Run `ims enhance <input> -o <output> --backend <backend>`."""
+    """Run `voxera enhance <input> -o <output> --backend <backend>`."""
     input_name, output_name, backend = params.values()
     input_path = world["paths"].get(input_name, _path_for(world, input_name))
     output_path = _path_for(world, output_name)
@@ -157,7 +157,7 @@ def when_run_enhance_backend(text, params, example, world):
 
 @REGISTRY.register(r"^the exit status is <([A-Za-z0-9_]+)>$")
 def then_exit_status(text, params, example, world):
-    """Assert the captured ims exit status equals the example value."""
+    """Assert the captured voxera exit status equals the example value."""
     (expected,) = params.values()
     run = _require_run(world)
     want = _parse_int(expected, "exit status")

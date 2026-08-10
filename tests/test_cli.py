@@ -12,7 +12,7 @@ def run_cli(*args, cwd=None):
     env = os.environ.copy()
     env["PYTHONPATH"] = os.pathsep.join([str(PROJECT_ROOT / "src"), str(PROJECT_ROOT)])
     return subprocess.run(
-        [sys.executable, "-m", "improve_my_sound.cli", *args],
+        [sys.executable, "-m", "voxera.cli", *args],
         capture_output=True,
         text=True,
         env=env,

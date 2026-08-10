@@ -1,4 +1,4 @@
-"""Normal acceptance pipeline driver for ims.
+"""Normal acceptance pipeline driver for voxera.
 
 Orchestrates the APS normal run for every feature file:
 

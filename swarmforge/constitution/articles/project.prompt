@@ -8,7 +8,7 @@ creators and podcasters; the brand owner is an AI Engineer running a 30-day
 content challenge (the first video launches this product).
 
 ## Architecture (decided)
-- **Core**: a Python package + CLI named `ims` (e.g. `ims enhance <input> -o <output>`).
+- **Core**: a Python package + CLI named `voxera` (e.g. `voxera enhance <input> -o <output>`).
   The core is the source of truth and the primary interface.
 - **Backends are pluggable**: `--backend {deepfilternet|dpdfnet|resemble}`. The
   neural-network engine is swappable; model/param selection is driven by measured
@@ -21,7 +21,7 @@ content challenge (the first video launches this product).
   a GUI. The CLI is the hero interface.
 
 ## Languages & layout
-- Python for the core (`src/improve_my_sound/`, console entry `ims`). Rust only later
+- Python for the core (`src/voxera/`, console entry `voxera`). Rust only later
   for the Tauri shell.
 - Unit tests: pytest. Acceptance specs: Gherkin `.feature` files via the APS pipeline.
 
@@ -38,7 +38,7 @@ content challenge (the first video launches this product).
 - Do not edit another role's prompt or workflow ownership without explicit user direction.
 
 ## Current work
-- **Feature 1 (in progress)**: happy-path end-to-end CLI — `ims enhance <input.wav>
+- **Feature 1 (in progress)**: happy-path end-to-end CLI — `voxera enhance <input.wav>
   -o <output.wav>` loads an audio file, runs ONE pluggable backend's enhancement, and
   writes the improved file. Define the backend-agnostic `enhance()` contract, then wire
   ONE concrete backend (default `dpdfnet`) to prove the path end-to-end. Error/edge

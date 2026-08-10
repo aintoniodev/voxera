@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from improve_my_sound.backends import BACKENDS, get_backend, list_backends
-from improve_my_sound.backends.base import Backend
-from improve_my_sound.backends.dpdfnet import DpdfNetBackend
-from improve_my_sound.enhance import EnhancementError, enhance
+from voxera.backends import BACKENDS, get_backend, list_backends
+from voxera.backends.base import Backend
+from voxera.backends.dpdfnet import DpdfNetBackend
+from voxera.enhance import EnhancementError, enhance
 
 
 def write_wav(path: Path, frames: int = 8000, rate: int = 8000) -> Path:
