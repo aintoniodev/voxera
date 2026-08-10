@@ -4,3 +4,7 @@
 
 # pi agent local state
 .pi/
+
+# autoresearch + model env (local)
+.auto/
+.venv/
