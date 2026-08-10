@@ -8,9 +8,11 @@ the user interface can never drift apart.
 from __future__ import annotations
 
 from improve_my_sound.backends.base import Backend
+from improve_my_sound.backends.deepfilternet import DeepFilterNetBackend
 from improve_my_sound.backends.dpdfnet import DpdfNetBackend
 
 BACKENDS: dict[str, type[Backend]] = {
+    DeepFilterNetBackend.name: DeepFilterNetBackend,
     DpdfNetBackend.name: DpdfNetBackend,
 }
 
