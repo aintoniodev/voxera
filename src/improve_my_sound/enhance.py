@@ -28,6 +28,18 @@ def _require_readable_wav(input_path: Path) -> None:
         raise EnhancementError(f"invalid wav file: {input_path}") from exc
 
 
+def _validate_input(inp: Path) -> None:
+    """Raise :class:`EnhancementError` for unusable ``inp`` paths."""
+    if not inp.exists():
+        raise EnhancementError(f"no such file: {inp}")
+    if inp.is_dir():
+        raise EnhancementError(f"input is a directory: {inp}")
+    if inp.suffix.lower() not in SUPPORTED_EXTENSIONS:
+        supported = ", ".join(sorted(SUPPORTED_EXTENSIONS))
+        raise EnhancementError(f"unsupported format: {inp.suffix} (supported: {supported})")
+    _require_readable_wav(inp)
+
+
 def enhance(
     input_path: str | Path,
     output_path: str | Path,
@@ -58,15 +70,7 @@ def enhance(
     inp = Path(input_path)
     out = Path(output_path)
 
-    if not inp.exists():
-        raise EnhancementError(f"no such file: {inp}")
-    if inp.is_dir():
-        raise EnhancementError(f"input is a directory: {inp}")
-    if inp.suffix.lower() not in SUPPORTED_EXTENSIONS:
-        supported = ", ".join(sorted(SUPPORTED_EXTENSIONS))
-        raise EnhancementError(f"unsupported format: {inp.suffix} (supported: {supported})")
-
-    _require_readable_wav(inp)
+    _validate_input(inp)
 
     impl = get_backend(backend)
     if impl is None:

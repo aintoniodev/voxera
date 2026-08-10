@@ -63,6 +63,12 @@ class Execution:
     steps: list[dict] = field(default_factory=list)
 
 
+def _execution_steps(feature: dict, scenario: dict) -> list[dict]:
+    """Steps for one scenario: background steps (if any) then scenario steps."""
+    background = feature.get("background") or []
+    return [dict(step) for step in background] + [dict(step) for step in scenario["steps"]]
+
+
 def expand(feature: dict) -> list[Execution]:
     """Expand a feature IR into one execution per example row.
 
@@ -70,21 +76,17 @@ def expand(feature: dict) -> list[Execution]:
     Background steps are prepended to every execution.
     """
     executions: list[Execution] = []
-    background = feature.get("background") or []
     for scenario_index, scenario in enumerate(feature["scenarios"]):
         examples = scenario.get("examples") or []
         rows: list[dict] = examples if examples else [{}]
         for example_index, example in enumerate(rows, start=1):
-            steps = [dict(step) for step in background] + [
-                dict(step) for step in scenario["steps"]
-            ]
             executions.append(
                 Execution(
                     scenario_index=scenario_index,
                     example_index=example_index,
                     name=f"{scenario['name']}/example_{example_index}",
                     example=example,
-                    steps=steps,
+                    steps=_execution_steps(feature, scenario),
                 )
             )
     return executions
@@ -143,6 +145,17 @@ class StepRegistry:
 
         return _decorator
 
+    def _params_for_match(self, match: re.Match, example: dict[str, str]) -> dict[str, str]:
+        """Map captured placeholder names to example values."""
+        params: dict[str, str] = {}
+        for name in match.groups():
+            if name not in example:
+                raise MissingValueError(
+                    f"example value for placeholder '{name}' is missing"
+                )
+            params[name] = example[name]
+        return params
+
     def match(
         self, text: str, example: dict[str, str]
     ) -> tuple[Callable, dict[str, str]] | None:
@@ -156,14 +169,7 @@ class StepRegistry:
         for pattern, fn, _kind in self._handlers:
             match = pattern.fullmatch(text)
             if match:
-                params: dict[str, str] = {}
-                for name in match.groups():
-                    if name not in example:
-                        raise MissingValueError(
-                            f"example value for placeholder '{name}' is missing"
-                        )
-                    params[name] = example[name]
-                return fn, params
+                return fn, self._params_for_match(match, example)
         expanded = expand_text(text, example)
         for literal, fn in self._literals:
             if literal == expanded:
