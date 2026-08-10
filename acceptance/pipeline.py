@@ -82,11 +82,18 @@ def parse_feature(feature: Path, ir_path: Path) -> None:
     )
 
 
+def find_dry_checker() -> str | None:
+    """Locate the APS-supplied gherkin-ir-dry-checker, or ``None``."""
+    on_path = shutil.which("gherkin-ir-dry-checker")
+    if on_path:
+        return on_path
+    home_bin = Path.home() / "swarmforge-bin" / "gherkin-ir-dry-checker"
+    return str(home_bin) if home_bin.exists() else None
+
+
 def dry_check(ir_path: Path, dry_path: Path) -> None:
     """Run the advisory IR-DRY checker; report-only, never fails the run."""
-    on_path = shutil.which("gherkin-ir-dry-checker")
-    home_bin = Path.home() / "swarmforge-bin" / "gherkin-ir-dry-checker"
-    checker = on_path or (str(home_bin) if home_bin.exists() else None)
+    checker = find_dry_checker()
     if checker is None:
         print(f"note: gherkin-ir-dry-checker not found; skipping dry check for {ir_path.name}")
         return
@@ -132,7 +139,7 @@ def run_generated_tests(pytest_args: list[str]) -> int:
     return proc.returncode
 
 
-def run_acceptance(features_dir: Path = FEATURES_DIR) -> int:
+def run_acceptance(features_dir: Path = FEATURES_DIR, pytest_args: list[str] | None = None) -> int:
     features = find_features(features_dir)
     if not features:
         print(f"no feature files found under {features_dir}")
@@ -146,31 +153,64 @@ def run_acceptance(features_dir: Path = FEATURES_DIR) -> int:
         dry_check(ir_path, dry_path)
         print(f"generating entry points for {feature.name}")
         generate_entry_points(ir_path, feature)
-    return run_generated_tests([])
+    return run_generated_tests(list(pytest_args or []))
+
+
+def _extract_pytest_args(args: list[str]) -> tuple[list[str], list[str]] | int:
+    """Pull ``--pytest-args <value>`` pairs out of ``args``.
+
+    Returns ``(pytest_args, remaining)`` or an exit code when a flag
+    appears without a value.
+    """
+    pytest_args: list[str] = []
+    rest: list[str] = []
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--pytest-args":
+            if i + 1 >= len(args):
+                print(f"unknown option: {arg}", file=sys.stderr)
+                return 2
+            pytest_args = args[i + 1].split()
+            i += 2
+            continue
+        rest.append(arg)
+        i += 1
+    return pytest_args, rest
+
+
+def parse_cli_args(
+    args: list[str],
+) -> tuple[Path, list[str]] | int:
+    """Parse pipeline CLI args into (features_dir, pytest_args).
+
+    Returns an exit code when the invocation is malformed.
+    """
+    extracted = _extract_pytest_args(args)
+    if isinstance(extracted, int):
+        return extracted
+    pytest_args, rest = extracted
+    for arg in rest:
+        if arg.startswith("-"):
+            print(f"unknown option: {arg}", file=sys.stderr)
+            return 2
+    if len(rest) > 1:
+        print(
+            "usage: python -m acceptance.pipeline [features-dir] [--pytest-args <args>]",
+            file=sys.stderr,
+        )
+        return 2
+    features_dir = Path(rest[0]) if rest else FEATURES_DIR
+    return features_dir, pytest_args
 
 
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    pytest_args: list[str] = []
-    features_dir = FEATURES_DIR
-    rest: list[str] = []
-    i = 0
-    while i < len(args):
-        if args[i] == "--pytest-args" and i + 1 < len(args):
-            pytest_args = args[i + 1].split()
-            i += 2
-        elif not args[i].startswith("-"):
-            rest.append(args[i])
-            i += 1
-        else:
-            print(f"unknown option: {args[i]}", file=sys.stderr)
-            return 2
-    if rest:
-        features_dir = Path(rest[0])
-    if len(rest) > 1:
-        print("usage: python -m acceptance.pipeline [features-dir] [--pytest-args <args>]", file=sys.stderr)
-        return 2
-    return run_acceptance(features_dir)
+    parsed = parse_cli_args(args)
+    if isinstance(parsed, int):
+        return parsed
+    features_dir, pytest_args = parsed
+    return run_acceptance(features_dir, pytest_args)
 
 
 if __name__ == "__main__":

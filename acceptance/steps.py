@@ -185,12 +185,16 @@ def then_command_fails(text, params, example, world):
         raise AssertionFailure("expected failure, but the command succeeded")
 
 
+def _require_file(path: Path, what: str) -> None:
+    """Raise :class:`AssertionFailure` unless ``path`` is an existing file."""
+    if not path.is_file():
+        raise AssertionFailure(f"expected {what} to exist: {path}")
+
+
 @REGISTRY.register(r"^the output file <([A-Za-z0-9_]+)> exists$")
 def then_output_exists(text, params, example, world):
     (filename,) = params.values()
-    path = _path_for(world, filename)
-    if not path.is_file():
-        raise AssertionFailure(f"expected output file to exist: {path}")
+    _require_file(_path_for(world, filename), "output file")
 
 
 @REGISTRY.register(r"^the output file <([A-Za-z0-9_]+)> does not exist$")
@@ -201,12 +205,8 @@ def then_output_missing(text, params, example, world):
         raise AssertionFailure(f"expected no output file, but found: {path}")
 
 
-@REGISTRY.register(r"^the output file <([A-Za-z0-9_]+)> is a wav file$")
-def then_output_is_wav(text, params, example, world):
-    (filename,) = params.values()
-    path = _path_for(world, filename)
-    if not path.is_file():
-        raise AssertionFailure(f"expected output wav file to exist: {path}")
+def _assert_wav_header(path: Path) -> None:
+    """Assert ``path`` carries a RIFF/WAVE header; raise :class:`AssertionFailure`."""
     try:
         header = path.read_bytes()[:12]
     except OSError as exc:
@@ -215,17 +215,27 @@ def then_output_is_wav(text, params, example, world):
         raise AssertionFailure(f"output file is not a wav file: {path}")
 
 
+@REGISTRY.register(r"^the output file <([A-Za-z0-9_]+)> is a wav file$")
+def then_output_is_wav(text, params, example, world):
+    (filename,) = params.values()
+    path = _path_for(world, filename)
+    _require_file(path, "output wav file")
+    _assert_wav_header(path)
+
+
+def _assert_stream_contains(run: dict, stream: str, needle: str, what: str) -> None:
+    """Assert ``needle`` appears in the captured ``stream`` of a CLI run."""
+    if needle not in run[stream]:
+        raise AssertionFailure(f"{what} does not contain '{needle}': {run[stream]!r}")
+
+
 @REGISTRY.register(r"^stdout contains <([A-Za-z0-9_]+)>$")
 def then_stdout_contains(text, params, example, world):
     (needle,) = params.values()
-    run = _require_run(world)
-    if needle not in run["stdout"]:
-        raise AssertionFailure(f"stdout does not contain '{needle}': {run['stdout']!r}")
+    _assert_stream_contains(_require_run(world), "stdout", needle, "stdout")
 
 
 @REGISTRY.register(r"^stderr contains <([A-Za-z0-9_]+)>$")
 def then_stderr_contains(text, params, example, world):
     (needle,) = params.values()
-    run = _require_run(world)
-    if needle not in run["stderr"]:
-        raise AssertionFailure(f"stderr does not contain '{needle}': {run['stderr']!r}")
+    _assert_stream_contains(_require_run(world), "stderr", needle, "stderr")
