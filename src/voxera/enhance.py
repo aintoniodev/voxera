@@ -120,8 +120,10 @@ def _enhance_pipeline(
 
     if dsp_only:
         y, ran_stages = master(data.samples, sr, preset_name)
+        resolved_model = None
     else:
         impl = _resolve_backend(backend, model, attn_limit_db, pf, seed)
+        resolved_model = model or getattr(impl, "model", None)
         t_model = time.perf_counter()
         TMP_DIR.mkdir(parents=True, exist_ok=True)
         fd, tmp_name = tempfile.mkstemp(suffix=".wav", dir=str(TMP_DIR))
@@ -154,7 +156,7 @@ def _enhance_pipeline(
         "preset": preset_name,
         "device": resolved_device,
         "backend": None if dsp_only else backend,
-        "model": None if dsp_only else model,
+        "model": None if dsp_only else resolved_model,
     }
     if not dsp_only:
         result["rtf_model"] = rtf_model
