@@ -29,12 +29,11 @@
   - Exit codes: 0 OK · 1 error · 2 uso/backend · **20 VOXERA_NO_SPEECH** (gate en master + enhance con pipeline; el enhance legacy sin preset NO lleva gate).
   - Default backend: `deepfilternet` (DeepFilterNet2, pf=off) — ganador del autoresearch (pesq 3.275, rtf 0.084 CPU).
   - Política formatos: input 16/22.05/44.1/48 kHz mono/stereo → interno 48k mono (0.5·(L+R), soxr) → WAV PCM_24.
-- **Tests:** 150/150 pasan — `.venv-ims/Scripts/python.exe -m pytest tests/ -q` (~2 min).
-- **Spec Gherkin:** `features/{enhance-cli,master-cli,analyze-cli}.feature` (28 escenarios, pipeline APS verde:
-  `python -m acceptance.pipeline features`). OJO: los steps viven en `acceptance/steps.py` (dialecto
-  "I run voxera …"); la feature vieja de fase 1 se reescribió a este dialecto.
+- **Tests:** 195/195 pasan — `.venv-ims/Scripts/python.exe -m pytest tests/ -q` (~3 min).
+- **Spec Gherkin:** `features/{enhance,master,analyze,score,silence,restore}-cli.feature` (25 escenarios, pipeline APS verde:
+  `python -m acceptance.pipeline features`). Steps en `acceptance/steps.py` (dialecto "I run voxera …").
 - **Envs:**
-  - `.venv-ims` (Python 3.11, uv): dpdfnet, deepfilternet, torch CPU, soundfile, soxr, scipy, pedalboard, pyloudnorm, webrtcvad-wheels, pytest → el env de producto.
+  - `.venv-ims` (Python 3.11, uv): dpdfnet, deepfilternet, torch CPU, soundfile, soxr, scipy, pedalboard, pyloudnorm, webrtcvad-wheels, resemblyzer, pesq, pystoi, pytest → el env de producto.
   - `.venv` (Python 3.11): el de autoresearch (torch, df, dpdfnet, speechmos roto, hydra roto → NO usar para pytest).
   - Sistema Python 3.13: torch 2.11+cu128 (**CUDA**, RTX 2060 6GB).
   - Modelos en `models/DeepFilterNet2/` (gitignored). `.auto/models/` tiene DF2+DF3.
@@ -55,7 +54,10 @@
   - `~/.config/psmux/psmux.conf` con default-shell Git Bash (backslashes DOBLADOS). `~/.bash_profile` carga `~/.bashrc` (bb en PATH).
   - Handoffs: helpers en `swarmforge/scripts/`; daemon `handoffd.bb`; estado en `.swarmforge/`.
 - **Autoresearch:** `.auto/` (gitignored) — measure.py (test set Piper ES+EN sintetizado, 12 clips, PESQ/STOI/SI-SNR/RTF vs clean), candidate.json, log.jsonl (22 configs). **VEREDICTO FINAL: DeepFilterNet2 pf=off.** resemble rinde peor en PESQ (full 1.74@rtf12.8, denoise_only 2.24@0.71) — AB subjetivo diferido. Los 2 agentes terminaron.
-- **Fase 2 (Tracks 0/1A/1/1B)**: ✅ hechos — `docs/ROADMAP-fase2.md` y `docs/SPECS-fase2.md` actualizados (7/12 decisiones resueltas). Siguiente: Track 3 (`voxera score`) → Track 2 (`silence`) → Track 4 (vídeo) → Track 6 (benchmark v2) → Track 8 (humano) → Track 5 → Track 7 (Tauri).
+- **Fase 2 (Tracks 0/1A/1/1B/2/3/4/5/6/8/7-UI)**: ✅ implementados (195 tests, 25 escenarios APS).
+  Pendiente solo lo humano: clips reales (decisión #3) + escucha Track 8, y shell Tauri (sin toolchain Rust).
+  `voxera score/silence/restore/inspect` + vídeo directo + benchmark `.auto/v2` + UI thin en `ui/`
+  (server.py en 127.0.0.1:8770: /enhance /score /vote → `.auto/human/votes.csv`).
 
 ## 5. Landmines operativos (NO volver a pisarlos)
 
@@ -70,28 +72,28 @@
 
 ## 6. Pendientes / candidatos fase 2
 
-- ~~**Rename a voxera**~~ ✅ DONE.
-- ~~**Tracks 1A + 1 + 1B**~~ ✅ DONE (analyze/master/enhance --preset, formatos, determinismo, exit 20).
-- **Track 3 — `voxera score`** (Voice Score/CVS 0-100 + resemblyzer con `--ref`): siguiente.
-- **Track 2 — `voxera silence`** (`--level light|medium|aggressive`, `--breaths preserve|attenuate|remove`).
-- **Track 4 — vídeo** (ffmpeg, `-c:v copy`, AAC 192 kbps, drift ≤10 ms).
-- **Track 6 — benchmark `.auto` v2** (sintético vs real separados; pedir clips reales a Antonio, decisión #3).
-- **Track 8 — evaluación humana** (A/B player HTML; decisión #12).
-- **Tauri desktop shell** (Track 7, al final; sidecar del CLI, binario Rust `deep-filter`).
-- **GPU**: flag `--gpu` explícito + pasada de RTF en CUDA (hoy `--device auto` ya usa CUDA si está).
-- **Re-evaluación con voz real** del usuario (media/test1.wav → `voxera analyze` + `enhance --preset youtube`).
-- ~~**Identidad git**~~ ✅ pasada a aintoniodev.
-- Limpieza: `tmp/dfbin_test/en01_snr15.wav` (384KB) commiteado por error (borrar en algún commit); `.auto/` y `models/` ya gitignored.
+- ~~**Tracks 0/1A/1/1B/2/3/4/5/6/8/7-UI**~~ ✅ implementados (195 tests, 25 escenarios APS).
+- **CLIPS REALES de Antonio (decisión #3)**: 10-30 grabaciones (mic, phone, webcam, fan, AC, room, street)
+  → `.auto/v2/real/*.wav` → `python .auto/v2/benchmark.py --suite real` → reporte real.md.
+- **Escucha Track 8** (decisión #12): 5-10 oyentes con `ui/ab-player.html` vía `ui/server.py` → `.auto/human/votes.csv`.
+- **Tauri shell**: instalar rustup + `cargo tauri init` reutilizando `ui/` (el CLI genera todo; Tauri solo envuelve).
+- **VoiceFixer/ClearerVoice**: candidatos ML de restoration para el benchmark (instalación pesada, diferida).
+- **GPU**: pasada de RTF en CUDA (hoy `--device auto` ya usa CUDA si está; falta medir).
+- **Re-evaluación con voz real**: `voxera analyze media/test1.wav` + `enhance --preset youtube` + `score --ref`.
+- Limpieza: `tmp/dfbin_test` ya borrado del repo; `.auto/` y `models/` gitignored.
 - Ver vídeo fase 1: guion completado en la conversación (CTAs, tagline en cierre opcional).
 
 ## 7. Verificación rápida
 
 ```bash
 cd <proyecto>
-.venv-ims/Scripts/python.exe -m pytest tests/ -q          # 150 passed (~2 min)
-.venv-ims/Scripts/python.exe -m acceptance.pipeline features  # 3 features verdes (28 escenarios)
-.venv-ims/Scripts/voxera analyze media/test1.wav          # análisis TTY (si media/ existe)
-.venv-ims/Scripts/voxera master media/test1.wav -o out.wav --preset youtube  # 48k/24-bit
+.venv-ims/Scripts/python.exe -m pytest tests/ -q          # 195 passed (~3 min)
+.venv-ims/Scripts/python.exe -m acceptance.pipeline features  # 6 features verdes (25 escenarios)
+.venv-ims/Scripts/voxera analyze media/test1.wav          # análisis TTY
+.venv-ims/Scripts/voxera enhance media/test1.wav -o out.wav --preset youtube  # NN + master
+.venv-ims/Scripts/voxera score out.wav --ref media/test1.wav  # CVS + voz preservada
+.venv-ims/Scripts/voxera silence media/test1.wav -o clean.wav --level medium
+.venv-ims/Scripts/python.exe ui/server.py 8770            # UI thin: 127.0.0.1:8770
 git status -s                                             # limpio
 ./launch-swarm.sh                                         # si hace falta el swarm
 ```

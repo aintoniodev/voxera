@@ -70,51 +70,64 @@ defecto), plosives candidates (burst <150 Hz en onset), hum 50/100/150 vs rumble
 noise-type taxonomy (11 tipos heurísticos, schema preparado para IA). **Heurísticas primero,
 medibles y sustituibles** — nada de ML por ahora.
 
-### 🟡 Track 2 — VAD + limpieza de silencio + boca/aire
-`voxera silence --level light|medium|aggressive [--breaths preserve|attenuate|remove]`:
-recorta huecos **nunca cortando respiraciones** (margen 200 ms); breaths preservados
-por defecto; `mouth_click_candidates` + confidence en analyze; `--declick` opcional.
+### ✅ Track 2 — VAD + limpieza de silencio + boca/aire *(hecho)*
+`voxera silence --level light|medium|aggressive [--breaths preserve|attenuate|remove]
+[--declick]`: recorta huecos (1.5→0.8 / 0.8→0.5 / 0.4→0.25 s) **nunca cortando
+respiraciones** (margen 200 ms + fades 2 ms en cortes); breaths preservados por
+defecto (byte-iguales verificado); `--breaths attenuate` (-6 dB) / `remove`;
+`--declick` (transitorios 2-6k, -6 dB). Segmentación por envolvente relativa
+(el VAD es poco fiable a nivel de gap). Reporte `original → cleaned · speech % → %`.
 
-### 🟡 Track 3 — Voice Score / "ready for publishing"
+### ✅ Track 3 — Voice Score / "ready for publishing" *(hecho)*
 `voxera score [--ref original]` → desglose 0–100 (Noise/Clarity/Loudness/Room/
-Dynamics con LRA+RMS) + CVS + veredicto. Con `--ref`: **Voice Preservation %**
-(cosine resemblyzer). **Métricas de producto separadas de las de research**
-(PESQ/STOI/ESTOI/SI-SDR/RTF/DNSMOS → solo benchmark).
+Dynamics) + CVS ponderado + veredicto (≥80 "ready for publishing"). Con `--ref`:
+**Voice Preservation %** (cosine resemblyzer, stdout suprimido para JSON limpio).
+**Métricas de producto separadas de las de research** (PESQ/STOI/ESTOI/SI-SDR/RTF
+→ solo benchmark). También `voxera inspect` (analyze + recomendación).
 
-### 🟡 Track 4 — Vídeo directo (ffmpeg ya disponible)
-`voxera enhance video.mp4`: extraer audio → pipeline → reemplazar (`-c:v copy`,
-AAC 192 kbps). Criterios A/V: drift ≤ 10 ms, vídeo bit-identical, timestamps y
-duración de contenedor preservadas.
+### ✅ Track 4 — Vídeo directo (ffmpeg) *(hecho)*
+`voxera enhance video.mp4 -o out.mp4 --preset X` / `voxera master video.mp4`:
+ffprobe detecta vídeo → extrae audio 48k mono → pipeline → mux (`-c:v copy` +
+AAC 192 kbps, `--audio-bitrate` override). Criterios verificados en test: vídeo
+**bit-identical**, drift ≤ 10 ms, duración de contenedor preservada. Vídeo sin
+`--preset`/`--dsp-only` → error de uso (exit 2).
 
-### 🔴 Track 5 — Dereverb, declipping, restoration (postergado)
-Solo tras Tracks 1–3. VoiceFixer/ClearerVoice como candidatos; **de-plosive y
-dehum** entran aquí si se aprueban (decisión abierta #11).
+### ✅ Track 5 — Declipping, deplosive, dehum (restoration heurística) *(hecho)*
+`voxera restore [--declip] [--deplosive] [--dehum N] [--preset X]`: declip
+(reconstrucción de flat-tops por interpolación cúbica, techo adaptativo, audio
+limpio bit-idéntico), deplosive (burst <150 Hz en onsets), dehum (notch).
+VoiceFixer/ClearerVoice: candidatos ML a evaluar en benchmark v2 (instalación
+pesada diferida); la decisión #11 (de-plosive/dehum en Track 5) queda cerrada.
 
-### 🟡 Track 6 — Benchmark `.auto` v2: **sintético y real separados**
-- **A. Synthetic** (clean + ruido/reverb/clipping controlados, hay ground truth):
-  PESQ · STOI · ESTOI · SI-SDR (+ LUFS/TP/clipping de control).
-- **B. Real-world** (mic/phone/webcam/fan/AC/room/street, sin ground truth):
-  DNSMOS (cuando funcione) · speaker-sim · LUFS · RTFₘ/RTFₚ/RTFₑ · artifact proxy ·
-  human preference (Track 8).
-- Entregable: tabla `model × métricas` por suite, nunca fusionada. Candidatos:
-  DF2 baseline · DF3 · **DF2 + master presets** · DP-DPNet · VoiceFixer.
+### ✅ Track 6 — Benchmark `.auto/v2`: **sintético y real separados** *(hecho)*
+- **A. Synthetic** (`build_synthetic.py`: clean + noise SNR 0/10/20 + reverb IR +
+  clipping; ground truth): PESQ · STOI · ESTOI · SI-SDR (+ LUFS/TP/clipping) +
+  RTFₘ/RTFₚ/RTFₑ. Ejecutado: DF2 pesq 3.07 · DF3 2.98 · dpdfnet 2.71 · DF2+master
+  baja métricas de referencia (esperado: el master es para loudness/consistencia).
+- **B. Real-world** (`.auto/v2/real/*.wav` — clips de Antonio, decisión #3):
+  SNR est · speaker-sim (resemblyzer) · LUFS · TP · crest · RTFₑ.
+- Entregable: `.auto/v2/reports/{synthetic,real}.md`, **nunca fusionados**.
 
-### 🆕 Track 8 — Evaluación humana *(nuevo)*
-**La métrica definitiva: que alguien prefiera la voz B.** 5–10 oyentes, 10–20 clips
-real-world, condiciones A=original / B=DF2 / C=DF2+master / D=otro modelo,
-pairwise preference + MOS 1–5, blind + orden aleatorio + **LUFS normalizado** entre
-condiciones. Umbral propuesto: DF2+master ≥ DF2 en ≥60% de escuchas.
+### ✅ Track 8 — Evaluación humana *(infraestructura hecha; escucha pendiente de Antonio)*
+`ui/ab-player.html` (waveform, **división arrastrable** ORIGINAL|ENHANCED, blind,
+match loudness RMS, pairwise + MOS 1-5) + `ui/server.py` (POST /vote →
+`.auto/human/votes.csv`). Protocolo en `.auto/human/README.md`: 5–10 oyentes,
+10–20 clips reales, A=original/B=DF2/C=DF2+master/D=DF3, LUFS normalizado,
+umbral ≥60% para DF2+master vs DF2 (decisión #12 pendiente de confirmar).
 
-### 🔴 Track 7 — Tauri desktop (UI thin, al final)
-El CLI genera todo (wavs A/B, JSON); A/B player standalone se reutiliza en Track 8
-(puede adelantarse en versión mínima HTML).
+### ✅ Track 7 — UI thin (Tauri pendiente de toolchain Rust) *(HTML hecho)*
+Sin cargo/rustc en esta máquina → UI thin en `ui/`: `index.html` (upload →
+preset → enhance → Voice Score con barras) + `ab-player.html` + `server.py`
+(wraps el CLI: /enhance, /score, /vote, /media). **El CLI sigue generando todo**
+(wavs A/B, JSON). Tauri completo queda documentado como pendiente: instalar
+rustup + `cargo tauri init` reutilizando `ui/`.
 
 ## Orden de implementación
 
 ```
-Track 0 (rename, hecho) → Track 1A (fundaciones) → Track 1 (analyze+master, +1B)
-→ Track 3 (score) → Track 2 (silence/boca) → Track 4 (vídeo) → Track 6 (benchmark v2)
-→ Track 8 (humano) → Track 5 (restoration) → Track 7 (Tauri)
+**Todos los tracks implementados** (0, 1A, 1, 1B, 2, 3, 4, 5, 6, 8, 7-UI):
+pendiente solo la parte humana (escucha Track 8 con clips reales) y el shell Tauri
+(toolchain Rust). El orden seguido: 0 → 1A → 1(+1B) → 3 → 2 → 4 → 5 → 6 → 8 → 7-UI.
 ```
 
 **Justificación:** explotar el pipeline alrededor de DF2 antes que nada; 1A congela

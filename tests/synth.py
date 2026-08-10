@@ -94,6 +94,18 @@ def with_clicks(seed: int = 9) -> np.ndarray:
     return out.astype(np.float32)
 
 
+def long_gaps(seed: int = 11) -> np.ndarray:
+    """Speech 1s + gap 2s + speech 1s + gap 1.2s + speech 1s (total ~5.2 s)."""
+    rng = np.random.default_rng(seed)
+    parts: list[np.ndarray] = []
+    for gap_s in (2.0, 1.2):
+        seg = speech_like(seconds=1.0, gap_frac=0.0, seed=seed + len(parts))
+        parts.append(seg)
+        parts.append(np.zeros(int(gap_s * SR), dtype=np.float32))
+    parts.append(speech_like(seconds=1.0, gap_frac=0.0, seed=seed + 9))
+    return np.concatenate(parts).astype(np.float32)
+
+
 def with_plosive(seed: int = 5) -> np.ndarray:
     """Speech whose first onset contains a strong <150 Hz burst (P/B/T-like)."""
     speech = speech_like(seconds=2.0, gap_frac=0.0, seed=seed)

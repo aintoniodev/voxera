@@ -23,6 +23,10 @@ from voxera.dsp import DEFAULT_PRESET, preset_names
 from voxera.enhance import EnhancementError, UnknownBackendError, enhance
 from voxera.errors import NO_SPEECH_EXIT_CODE, NoSpeechError
 from voxera.master import master_file
+from voxera.restore import restore_file
+from voxera.score import score_file
+from voxera.silence import LEVELS, silence_file
+from voxera import video as video_mod
 
 PROG = "voxera"
 
@@ -107,6 +111,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="inference seed (determinism on CPU)",
     )
+    enhance_parser.add_argument(
+        "--audio-bitrate",
+        default="192k",
+        help="AAC bitrate for video output (default: 192k)",
+    )
     _add_common(enhance_parser)
 
     # --- master ------------------------------------------------------------
@@ -155,6 +164,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="print the plan and exit 0 without writing OUT",
     )
+    master_parser.add_argument(
+        "--audio-bitrate",
+        default="192k",
+        help="AAC bitrate for video output (default: 192k)",
+    )
     _add_common(master_parser)
 
     # --- analyze -----------------------------------------------------------
@@ -179,6 +193,109 @@ def build_parser() -> argparse.ArgumentParser:
         help="report format (default: tty human summary)",
     )
     _add_common(analyze_parser)
+
+    # --- score --------------------------------------------------------------
+    score_parser = subparsers.add_parser(
+        "score",
+        help="voice score (CVS 0-100) — evaluation ONLY, never modifies audio",
+        description="Product Voice Score: Noise/Clarity/Loudness/Room/Dynamics "
+        "weighted into a CVS 0-100 + verdict. With --ref also reports "
+        "Voice Preservation % (resemblyzer speaker cosine).",
+    )
+    score_parser.add_argument("input", help="source audio file (WAV)")
+    score_parser.add_argument(
+        "--ref",
+        default=None,
+        help="reference audio (e.g. the original) for Voice Preservation %",
+    )
+    score_parser.add_argument(
+        "-o",
+        "--output",
+        default=None,
+        help="write the JSON report to this path (in addition to stdout)",
+    )
+    score_parser.add_argument(
+        "--format",
+        choices=("tty", "json"),
+        default="tty",
+        help="report format (default: tty human summary)",
+    )
+    _add_common(score_parser)
+
+    # --- silence ------------------------------------------------------------
+    silence_parser = subparsers.add_parser(
+        "silence",
+        help="editing ONLY: trim silences, handle breaths and mouth clicks",
+        description="Trim over-long gaps between speech (never cutting breaths), "
+        "optionally attenuate/remove breaths and attenuate mouth clicks.",
+    )
+    silence_parser.add_argument("input", help="source audio file (WAV)")
+    silence_parser.add_argument(
+        "-o", "--output", required=True, help="output path for the cleaned audio"
+    )
+    silence_parser.add_argument(
+        "--level",
+        choices=tuple(LEVELS),  # imported below
+        default="medium",
+        help="trim aggressiveness (default: medium)",
+    )
+    silence_parser.add_argument(
+        "--breaths",
+        choices=("preserve", "attenuate", "remove"),
+        default="preserve",
+        help="breath handling (default: preserve — never remove by default)",
+    )
+    silence_parser.add_argument(
+        "--declick",
+        action="store_true",
+        help="attenuate mouth-click transients by 6 dB",
+    )
+    _add_common(silence_parser)
+
+    # --- restore ------------------------------------------------------------
+    restore_parser = subparsers.add_parser(
+        "restore",
+        help="restoration heuristics: declip, deplosive, dehum (+ optional preset)",
+        description="Declip (flat-top reconstruction), de-plosive (LF burst "
+        "reduction at onsets), de-hum (notch) — then optionally the master "
+        "pipeline with a preset.",
+    )
+    restore_parser.add_argument("input", help="source audio file (WAV)")
+    restore_parser.add_argument(
+        "-o", "--output", required=True, help="output path for the restored audio"
+    )
+    restore_parser.add_argument(
+        "--declip", action="store_true", help="reconstruct hard-clipped flat-tops"
+    )
+    restore_parser.add_argument(
+        "--deplosive", action="store_true", help="reduce LF plosive bursts at onsets"
+    )
+    restore_parser.add_argument(
+        "--dehum",
+        type=int,
+        default=None,
+        help="notch the mains hum at this frequency (50/100/150)",
+    )
+    restore_parser.add_argument(
+        "--preset",
+        default=None,
+        choices=preset_names(),
+        help="optional master preset to run after restoration",
+    )
+    restore_parser.add_argument(
+        "--lufs", type=float, default=None, help="override the preset LUFS target"
+    )
+    _add_common(restore_parser)
+
+    # --- inspect ------------------------------------------------------------
+    inspect_parser = subparsers.add_parser(
+        "inspect",
+        help="analyze + recommendation (pretty wrapper of analyze)",
+        description="Run analyze and print a recommendation based on the metrics "
+        "(dehum, declick, restore, enhance presets).",
+    )
+    inspect_parser.add_argument("input", help="source audio file (WAV)")
+    _add_common(inspect_parser)
 
     return parser
 
@@ -248,12 +365,117 @@ def _print_stages(result: dict) -> None:
         print(f"  ✓ {stage}")
 
 
+def _score_tty(report: dict, ref: str | None) -> str:
+    score = report["score"]
+    dims = score["dimensions"]
+    lines = [
+        "",
+        f"Voice Score: {score['cvs']:.0f}/100 — \"{score['verdict']}\"",
+    ]
+    for key, label in (
+        ("noise", "Noise"),
+        ("clarity", "Clarity"),
+        ("loudness", "Loudness"),
+        ("room", "Room"),
+        ("dynamics", "Dynamics"),
+    ):
+        d = dims[key]
+        lines.append(f"  {label:<10} {d['value']:>5.0f}/100  ({d['detail']})")
+    if "voice_preservation_pct" in report:
+        lines.append(f"Voice preservation: {report['voice_preservation_pct']:.1f}% (vs {ref})")
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
 
 
+def _video_output_check(out: Path) -> None:
+    if out.suffix.lower() not in video_mod.VIDEO_EXTENSIONS:
+        raise EnhancementError(
+            f"video input requires a video output path (e.g. .mp4), got: {out}"
+        )
+
+
+def _enhance_video(args) -> int:
+    """Video path: extract audio -> pipeline -> mux (video bit-identical)."""
+    out = Path(args.output)
+    tmp_in = video_mod.temp_wav()
+    tmp_out = video_mod.temp_wav()
+    try:
+        _video_output_check(out)
+        video_mod.extract_audio(args.input, tmp_in)
+        result = enhance(
+            tmp_in,
+            tmp_out,
+            backend=args.backend,
+            model=args.model,
+            attn_limit_db=args.attn_limit_db,
+            pf=args.pf,
+            preset=args.preset,
+            dsp_only=args.dsp_only,
+            device=args.device,
+            seed=args.seed,
+        )
+        if isinstance(result, dict) and result.get("plan"):
+            print(result["plan"])
+            return 0
+        video_mod.mux(args.input, tmp_out, out, bitrate=args.audio_bitrate)
+        drift = video_mod.check_drift(args.input, out)
+    finally:
+        tmp_in.unlink(missing_ok=True)
+        tmp_out.unlink(missing_ok=True)
+    print(f"✓ {out} · drift {drift * 1000:.0f} ms · AAC {args.audio_bitrate}")
+    return 0
+
+
+def _master_video(args) -> int:
+    out = Path(args.output)
+    tmp_in = video_mod.temp_wav()
+    tmp_out = video_mod.temp_wav()
+    try:
+        _video_output_check(out)
+        video_mod.extract_audio(args.input, tmp_in)
+        result = master_file(
+            tmp_in,
+            tmp_out,
+            preset_name=args.preset,
+            lufs=args.lufs,
+            dehum_hz=None,
+            no_eq=args.no_eq,
+            no_comp=args.no_comp,
+            no_limit=args.no_limit,
+            no_loudnorm=args.no_loudnorm,
+            device=args.device,
+            dry_run=args.dry_run,
+        )
+        if args.dry_run:
+            print(result["plan"])
+            return 0
+        video_mod.mux(args.input, tmp_out, out, bitrate=args.audio_bitrate)
+        drift = video_mod.check_drift(args.input, out)
+    finally:
+        tmp_in.unlink(missing_ok=True)
+        tmp_out.unlink(missing_ok=True)
+    print(f"✓ {out} · drift {drift * 1000:.0f} ms · AAC {args.audio_bitrate}")
+    return 0
+
+
 def _cmd_enhance(args) -> int:
+    if video_mod.is_video_path(args.input):
+        if args.preset is None and not args.dsp_only:
+            print(
+                f"{PROG}: error: video input requires --preset or --dsp-only "
+                "(the master pipeline is mandatory for video)",
+                file=sys.stderr,
+            )
+            return 2
+        try:
+            return _enhance_video(args)
+        except EnhancementError as exc:
+            print(f"{PROG}: error: {exc}", file=sys.stderr)
+            return 1
     try:
         result = enhance(
             Path(args.input),
@@ -295,6 +517,12 @@ def _cmd_enhance(args) -> int:
 
 
 def _cmd_master(args) -> int:
+    if video_mod.is_video_path(args.input):
+        try:
+            return _master_video(args)
+        except EnhancementError as exc:
+            print(f"{PROG}: error: {exc}", file=sys.stderr)
+            return 1
     dehum_hz = None
     if args.dehum and not args.dry_run:
         try:
@@ -363,6 +591,109 @@ def _cmd_analyze(args) -> int:
     return 0
 
 
+def _cmd_score(args) -> int:
+    try:
+        report = score_file(args.input, ref_path=args.ref, device=args.device)
+    except EnhancementError as exc:
+        print(f"{PROG}: error: {exc}", file=sys.stderr)
+        return 1
+    text = dump_report(report)
+    if args.output:
+        Path(args.output).write_text(text, encoding="utf-8")
+    if args.format == "json" or args.output:
+        print(text, end="")
+    else:
+        print(_score_tty(report, args.ref))
+    return 0
+
+
+def _cmd_silence(args) -> int:
+    try:
+        result = silence_file(
+            Path(args.input),
+            Path(args.output),
+            level=args.level,
+            breaths=args.breaths,
+            declick=args.declick,
+            device=args.device,
+        )
+    except NoSpeechError as exc:
+        print(f"{PROG}: {exc}", file=sys.stderr)
+        return NO_SPEECH_EXIT_CODE
+    except EnhancementError as exc:
+        print(f"{PROG}: error: {exc}", file=sys.stderr)
+        return 1
+    if args.verbose:
+        _print_verbose(result)
+    print(
+        f"✓ {result['output']} · original {result['duration_in_s'] / 60:.0f}:{result['duration_in_s'] % 60:04.1f}"
+        f" → cleaned {result['duration_out_s'] / 60:.0f}:{result['duration_out_s'] % 60:04.1f}"
+        f" · speech {result['speech_ratio_in'] * 100:.0f}% → {result['speech_ratio_out'] * 100:.0f}%"
+    )
+    return 0
+
+
+def _cmd_restore(args) -> int:
+    try:
+        result = restore_file(
+            Path(args.input),
+            Path(args.output),
+            do_declip=args.declip,
+            do_deplosive=args.deplosive,
+            dehum_hz=args.dehum,
+            preset=args.preset,
+            lufs=args.lufs,
+            device=args.device,
+        )
+    except NoSpeechError as exc:
+        print(f"{PROG}: {exc}", file=sys.stderr)
+        return NO_SPEECH_EXIT_CODE
+    except EnhancementError as exc:
+        print(f"{PROG}: error: {exc}", file=sys.stderr)
+        return 1
+    if args.verbose:
+        _print_verbose(result)
+    print(
+        f"✓ {result['output']} · stages: {', '.join(result['stages'])}"
+        f" · clipping {result['clipping_ratio_in'] * 100:.2f}% → {result['clipping_ratio_out'] * 100:.2f}%"
+    )
+    return 0
+
+
+def _cmd_inspect(args) -> int:
+    try:
+        report = analyze(args.input, device=args.device)
+    except EnhancementError as exc:
+        print(f"{PROG}: error: {exc}", file=sys.stderr)
+        return 1
+    print(_analyze_tty(report))
+    print("\nRecommendation:")
+    art = report["artifacts"]
+    spec = report["spectral"]
+    room = report["room"]
+    voice = report["voice"]
+    snr = voice["snr_db"]["value"]
+    if art["mouth_click_candidates"]["count"] >= 5:
+        print("  · mouth clicks detected → voxera silence --declick")
+    if art["breaths"]["count"] >= 3:
+        print("  · breaths detected (preserved by default) → voxera silence --breaths attenuate")
+    if art["plosives"]["candidates"] >= 2:
+        print("  · plosives detected → voxera restore --deplosive")
+    if report["loudness"]["clipping_ratio"] > 0.001:
+        print("  · clipping detected → voxera restore --declip")
+    hum = spec["hum_db"]
+    hum_key = {"50 Hz": "h50", "100 Hz": "h100", "150 Hz": "h150"}.get(hum.get("dominant") or "")
+    if hum_key and (hum.get(hum_key) or -99) > -45:
+        print(f"  · mains hum {hum['dominant']} → voxera master --dehum / restore --dehum")
+    if room["reverb"] in ("medium", "high"):
+        print("  · reverb present → restoration track (dereverb) postergado")
+    if snr is not None and snr < 15:
+        print("  · noisy input → voxera enhance --preset creator")
+    if snr is not None and snr >= 15:
+        print("  · decent signal → voxera master --preset youtube")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     # Windows console/pipes default to cp1252 and crash on '✓' etc.
     for stream in (sys.stdout, sys.stderr):
@@ -379,6 +710,14 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_master(args)
     if args.command == "analyze":
         return _cmd_analyze(args)
+    if args.command == "score":
+        return _cmd_score(args)
+    if args.command == "silence":
+        return _cmd_silence(args)
+    if args.command == "restore":
+        return _cmd_restore(args)
+    if args.command == "inspect":
+        return _cmd_inspect(args)
 
     parser.error(f"unknown command: {args.command}")
     return 2

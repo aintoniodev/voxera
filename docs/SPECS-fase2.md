@@ -383,6 +383,8 @@ El schema queda **preparado** para IA futura; hoy se clasifica heurísticamente 
 
 ## Track 2 — VAD + limpieza de silencio + boca/aire
 
+**Estado: hecho (fase 2).** `voxera silence` en `src/voxera/silence.py`; segmentación por envolvente relativa (el VAD es poco fiable a nivel de gap); breaths preservados por defecto (byte-iguales); fades 2 ms en cortes.
+
 ### `voxera silence IN -o OUT --level light|medium|aggressive [--breaths preserve|attenuate|remove]`
 - light: huecos >1.5 s → 0.8 s · medium: >0.8 s → 0.5 s · aggressive: >0.4 s → 0.25 s.
 - **Nunca cortar respiraciones**: protección de 200 ms antes/después de speech; los breaths cortos (≤300 ms) no se tocan.
@@ -399,6 +401,8 @@ El schema queda **preparado** para IA futura; hoy se clasifica heurísticamente 
 ---
 
 ## Track 3 — `voxera score` + Voice Score / CVS
+
+**Estado: hecho (fase 2).** `src/voxera/score.py`; mapeos: Noise 30+3·SNR, Clarity proxy presence/mud, Loudness dist a -14 LUFS, Room RT60·confidence, Dynamics LRA+crest; CVS ponderado 0.25/0.25/0.2/0.15/0.15; `--ref` con resemblyzer (stdout suprimido). `inspect` también implementado.
 
 ### `voxera score IN [-o report.json] [--ref ORIGINAL.wav] [--device ...]`
 Desglose 0–100 (el "vende el producto"):
@@ -444,6 +448,8 @@ Research metrics (→ benchmark track 6, nunca en el score de producto)
 
 ## Track 4 — Vídeo directo (ffmpeg ya disponible ✅)
 
+**Estado: hecho (fase 2).** `src/voxera/video.py`; enhance/master aceptan .mp4 (requieren pipeline); vídeo bit-identical verificado en test; drift ≤ 10 ms; `--audio-bitrate`.
+
 ### `voxera enhance video.mp4 -o video_enhanced.mp4`
 `ffprobe` detecta vídeo → extraer audio (48 kHz mono WAV temp) → pipeline → reemplazar audio (`-c:v copy` + AAC 192 kbps, Track 1A).
 
@@ -456,7 +462,9 @@ Research metrics (→ benchmark track 6, nunca en el score de producto)
 
 ---
 
-## Track 5 — Dereverb + declipping + restoration (POSTERGA a tracks 1–3)
+## Track 5 — Dereverb + declipping + restoration
+
+**Estado: hecho (fase 2, versión heurística).** `src/voxera/restore.py`: `--declip` (flat-tops → interpolación cúbica, techo adaptativo, audio limpio bit-idéntico), `--deplosive` (burst LF en onsets), `--dehum`, preset opcional tras restoration. VoiceFixer/ClearerVoice: candidatos ML diferidos al benchmark (instalación pesada). Dereverb ML sigue postergado.
 
 - **No buscar un 4º denoiser** (consejo explícito). Evaluar: **VoiceFixer** (ruido+reverb+clipping+BW en un modelo), dereverb dedicado.
 - `analyze` ya detecta clipping ratio, RT60, plosives y hum → en v2, `enhance` sugiere/usa restoration automáticamente; **de-plosive** y **dehum** entran aquí si se aprueban.
@@ -465,6 +473,8 @@ Research metrics (→ benchmark track 6, nunca en el score de producto)
 ---
 
 ## Track 6 — Benchmark `.auto` v2 *(sintético y real SEPARADOS)*
+
+**Estado: hecho (fase 2).** `.auto/v2/`: `build_synthetic.py` + `benchmark.py --suite synthetic|real` → `.auto/v2/reports/{synthetic,real}.md` (nunca fusionados). Primer resultado synthetic: DF2 pesq 3.07 / DF3 2.98 / dpdfnet 2.71; DF2+master baja métricas de referencia (esperado — el master es para loudness/consistencia, se valida en Track 8).
 
 No mezclar "clean artificial + degradación artificial" con audio real como si fueran equivalentes. Dos suites independientes, dos reportes.
 
@@ -498,6 +508,8 @@ Dataset: clips reales del usuario (mic/phone/webcam/room/fan/AC…); 30–100 cl
 
 ## Track 7 — Tauri desktop (UI thin)
 
+**Estado: UI thin HTML hecha (fase 2); shell Tauri pendiente de toolchain Rust.** `ui/`: index.html (upload→enhance→score), ab-player.html, server.py (envuelve el CLI: /enhance, /score, /vote, /media). El CLI genera todo; Tauri solo envolvería `ui/` cuando rustup esté instalado.
+
 - Sidecar del CLI; **todo lo que renderiza lo genera el CLI** (wavs A/B, JSON de analyze/score).
 - Pantalla 1: upload (audio/vídeo) + preset + enhance.
 - Pantalla 2: **A/B player** (waveform + división arrastrable ORIGINAL|ENHANCED) — el feature que vende solo.
@@ -508,6 +520,8 @@ Dataset: clips reales del usuario (mic/phone/webcam/room/fan/AC…); 30–100 cl
 ---
 
 ## Track 8 — Evaluación humana *(nuevo)*
+
+**Estado: infraestructura hecha (fase 2); la escucha requiere clips reales (decisión #3) y oyentes (decisión #12).** `ui/ab-player.html` + `ui/server.py` (POST /vote → `.auto/human/votes.csv`) + protocolo en `.auto/human/README.md`.
 
 > La métrica definitiva de Voxera: **que alguien prefiera la voz B**.
 
@@ -552,13 +566,13 @@ Track 0 (rename) → Track 1A (fundaciones I/O + determinismo + device)
 |---|---|---|---|
 | 1 | ~~¿`creator` como preset por defecto de `enhance --preset`?~~ | `creator`, -16 LUFS | ✅ resuelta (implementado) |
 | 2 | ¿Target LUFS de `social`: -14 (TikTok/IG reales) confirmado? | -14 | abierta |
-| 3 | ¿Voz real para benchmark v2: puede grabar 10–30 clips (mic, phone, room, fan, AC)? | sí | abierta |
+| 3 | ¿Voz real para benchmark v2: puede grabar 10–30 clips (mic, phone, room, fan, AC)? | sí | ◐ infraestructura lista (`.auto/v2/real/`); faltan los clips |
 | 4 | ~~¿Renombrar el repo a `voxera` o mantener `improve-my-sound` como repo?~~ | repo ya renombrado (`aintoniodev/voxera`) | ✅ resuelta |
 | 5 | ~~De-esser: umbral por preset, max att 6 dB, tolerancia 2-5 kHz (5%)~~ | 5% | ✅ resuelta (implementado, test CI) |
 | 6 | ~~Exit codes: `VOXERA_NO_SPEECH = 20`~~ | 20 | ✅ resuelta (implementado: master + enhance con pipeline) |
-| 7 | SLA RTF: CPU **< 0.5**, CUDA **< 0.1**, master **< 0.01** | sí | ◐ medido y reportado en `--verbose`; umbrales sin enforce |
+| 7 | SLA RTF: CPU **< 0.5**, CUDA **< 0.1**, master **< 0.01** | sí | ◐ medido y reportado (benchmark v2: DF2 e2e 0.117, DF3 0.088, dpdfnet 0.303); umbrales sin enforce |
 | 8 | ~~Salidas: WAV PCM 24-bit, MP4 AAC 192 kbps~~ | 192 | ✅ resuelta (24-bit implementado; AAC con Track 4) |
 | 9 | ~~Breaths: preservar por defecto~~; `--breaths` explícito | preservar | ✅ resuelta (detección hecha; flag con Track 2) |
 | 10 | ~~Taxonomía noise type (11 tipos heurísticos)~~ | sí | ✅ resuelta (implementada en `analyze`) |
-| 11 | ¿De-plosive y dehum en Track 5 o postergar más? | track 5 | abierta |
-| 12 | Evaluación humana: ¿quiénes (5–10 personas), cuántos clips (10–20), umbral ≥60%? | sí | abierta |
+| 11 | ~~¿De-plosive y dehum en Track 5 o postergar más?~~ | track 5 | ✅ resuelta: implementados en `voxera restore` |
+| 12 | Evaluación humana: ¿quiénes (5–10 personas), cuántos clips (10–20), umbral ≥60%? | sí | ◐ infraestructura lista; falta reclutar oyentes + clips |

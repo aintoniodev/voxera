@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>voxera — haz que tu voz suene profesional</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; background: #0d0d12; color: #ddd; margin: 0; padding: 24px; max-width: 900px; margin: 0 auto; }
+  h1 { color: #7c5cff; font-size: 22px; }
+  .tag { color: #888; font-size: 13px; }
+  .card { background: #17171c; border: 1px solid #26262e; border-radius: 12px; padding: 20px; margin: 14px 0; }
+  button { background: #7c5cff; color: #fff; border: 0; border-radius: 8px; padding: 10px 18px; font-size: 15px; cursor: pointer; }
+  button:disabled { opacity: .4; cursor: wait; }
+  select, input[type=file] { background: #1f1f26; color: #ddd; border: 1px solid #33333c; border-radius: 8px; padding: 8px; }
+  .bar { height: 10px; background: #26262e; border-radius: 5px; overflow: hidden; margin: 4px 0 10px; }
+  .bar > div { height: 100%; background: linear-gradient(90deg, #7c5cff, #35d0a5); }
+  .dim { display: flex; justify-content: space-between; font-size: 13px; }
+  .big { font-size: 34px; font-weight: 700; color: #35d0a5; }
+  audio { width: 100%; margin-top: 10px; }
+  a { color: #7ab8ff; }
+</style>
+</head>
+<body>
+<h1>voxera <span class="tag">"Sound like you, only better."</span></h1>
+
+<div class="card">
+  <div class="tag">1 · Sube tu audio o vídeo</div>
+  <input type="file" id="file" accept=".wav,.mp3,.m4a,.mp4,.mov">
+  <div class="tag" style="margin-top:10px">2 · Elige preset</div>
+  <select id="preset">
+    <option value="creator">creator — natural + clear (-16 LUFS)</option>
+    <option value="youtube">youtube — warm + present (-14)</option>
+    <option value="podcast">podcast — rich + consistent (-16)</option>
+    <option value="social">social — loud + punchy (-14)</option>
+    <option value="bad-room">bad-room — ruido + eco (-16)</option>
+  </select>
+  <div style="margin-top:14px"><button id="go">✨ Enhance</button> <span id="status"></span></div>
+</div>
+
+<div class="card" id="result" style="display:none">
+  <div class="dim"><span>Voice Score</span><span class="big" id="cvs">–</span></div>
+  <div id="verdict" class="tag"></div>
+  <div id="dims"></div>
+  <div class="tag" style="margin-top:12px">Audio procesado:</div>
+  <audio id="player" controls></audio>
+  <div class="tag" style="margin-top:8px">
+    Compara A/B (división arrastrable): <a href="/ab-player.html" target="_blank">abrir A/B player</a> —
+    carga el original y <span id="outName"></span>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+$("go").onclick = async function () {
+  const f = $("file").files[0];
+  if (!f) { $("status").textContent = "sube un archivo primero"; return; }
+  $("go").disabled = true; $("status").textContent = "procesando (NN + master)…";
+  const form = new FormData();
+  form.append("file", f);
+  form.append("preset", $("preset").value);
+  try {
+    const r = await fetch("/enhance", { method: "POST", body: form });
+    const data = await r.json();
+    if (!data.ok) { $("status").textContent = "error: " + data.error; return; }
+    $("result").style.display = "block";
+    $("player").src = data.url;
+    $("outName").textContent = data.url.split("/").pop();
+    if (data.report && data.report.score) {
+      const s = data.report.score;
+      $("cvs").textContent = Math.round(s.cvs);
+      $("verdict").textContent = "“" + s.verdict + "”";
+      const order = [["noise", "Noise"], ["clarity", "Clarity"], ["loudness", "Loudness"], ["room", "Room"], ["dynamics", "Dynamics"]];
+      $("dims").innerHTML = order.map(([k, label]) => {
+        const d = s.dimensions[k];
+        return `<div class="dim"><span>${label} — ${d.detail}</span><span>${Math.round(d.value)}</span></div>` +
+               `<div class="bar"><div style="width:${d.value}%"></div></div>`;
+      }).join("");
+    }
+    $("status").textContent = "✓ listo";
+  } catch (e) {
+    $("status").textContent = "error de red: " + e;
+  } finally {
+    $("go").disabled = false;
+  }
+};
+</script>
+</body>
+</html>

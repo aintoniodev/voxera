@@ -39,6 +39,11 @@ uv venv --python 3.11 .venv-ims && uv pip install -p .venv-ims -e .
 | `voxera enhance IN -o OUT --dry-run` | Plan `VOXERA PLAN` sin escribir OUT ni cargar la NN. |
 | `voxera master IN -o OUT [--preset X]` | Voice mastering ONLY: DC → high-pass LR24 → [dehum] → EQ vocal → de-esser → comp → limiter -1 dBTP → loudnorm. |
 | `voxera analyze IN [--format tty\|json] [-o report.json]` | Análisis completo con confidence: LUFS-I/S/LRA/RMS/TP, VAD, SNR, bandas espectrales, hum 50/100/150, RT60, DC, plosives, breaths, mouth clicks, noise type. |
+| `voxera score IN [--ref ORIG]` | Voice Score CVS 0-100 (Noise/Clarity/Loudness/Room/Dynamics) + veredicto; `--ref` → Voice Preservation % (resemblyzer). |
+| `voxera silence IN -o OUT --level L [--breaths preserve\|attenuate\|remove] [--declick]` | Recorta silencios sin cortar respiraciones; reporta `original → cleaned`. |
+| `voxera restore IN -o OUT [--declip] [--deplosive] [--dehum N] [--preset X]` | Restoration heurística: flat-tops, plosives, hum + master opcional. |
+| `voxera inspect IN` | `analyze` + recomendación (dehum/declick/restore/preset). |
+| `voxera enhance video.mp4 -o out.mp4 --preset X` | Vídeo directo: extrae audio → pipeline → mux (`-c:v copy` + AAC 192k, drift ≤10 ms). |
 
 **Presets congelados:** `creator` (-16 LUFS, natural+clear, default) · `youtube` (-14, warm+present) ·
 `podcast` (-16, rich+consistent) · `social` (-14, loud+punchy) · `bad-room` (-16, high-pass 90 Hz).
@@ -72,7 +77,9 @@ src/voxera/   enhance() contract, backend registry, audioio (policy), dsp/ (pipe
               analyze.py, master.py, vad.py, device.py, determinism.py, CLI
 features/     Gherkin: enhance-cli (10 escenarios), master-cli (5), analyze-cli (3)
 acceptance/   APS Gherkin acceptance pipeline (parse→dry-check→generate→run)
-tests/        150 pytest unit tests (Track 1A + Track 1 + fase 1)
+tests/        195 pytest unit tests (tracks 0-5 + fase 1)
+ui/           UI thin (index + A/B player + server.py: /enhance /score /vote)
+.auto/v2/     benchmark v2: synthetic + real separados (reports/*.md)
 swarmforge/   SwarmForge four-pack (specifier→coder→refactorer→architect)
 .auto/        autoresearch harness (gitignored): measure.py, candidate.json, log.jsonl
 ```
@@ -85,14 +92,16 @@ swarmforge/   SwarmForge four-pack (specifier→coder→refactorer→architect)
 - **Fase 1** (`voxera enhance` happy-path CLI): ✅ complete — 70 tests, exit codes per spec.
 - **Model selection**: ✅ autoresearch verdict — **DeepFilterNet2 (pf=off) is the default**.
 - **Fase 2 — Track 0 (rename)**: ✅ `improve_my_sound`/`ims` → `voxera`.
-- **Fase 2 — Track 1A (fundaciones)**: ✅ format policy, downmix/resample soxr, determinismo
-  (JSON estable + DSP byte-equivalente), device policy, RTF model/pipeline/e2e/master, provenance,
-  exit 20 `VOXERA_NO_SPEECH`.
-- **Fase 2 — Track 1 (analyze + master, con 1B)**: ✅ `voxera analyze` (métricas + confidence),
-  `voxera master` (pipeline congelado + presets), `enhance --preset/--dsp-only/--dry-run`,
-  de-esser con criterio de no-daño, breaths/plosives/clicks/hum/DC/noise-type heurísticos.
-- **Next**: Track 3 (`voxera score`) → Track 2 (`silence`) → Track 4 (vídeo) → Track 6 (benchmark v2)
-  → Track 8 (humano) → Track 5 (restoration) → Track 7 (Tauri). Detalle: `docs/ROADMAP-fase2.md`.
+- **Fase 2 — Tracks 1A/1/1B (fundaciones + analyze/master)**: ✅ formatos, determinismo, device,
+  RTF, provenance, exit 20, presets, de-esser no-daño, heurísticas de voz.
+- **Fase 2 — Tracks 2/3/4/5**: ✅ `silence` (gaps+breaths+declick), `score` (CVS + voz preservada),
+  vídeo directo (bit-identical, AAC 192k), `restore` (declip/deplosive/dehum).
+- **Fase 2 — Track 6 (benchmark v2)**: ✅ `.auto/v2/` sintético ejecutado (DF2 pesq 3.07);
+  suite real esperando clips de Antonio en `.auto/v2/real/`.
+- **Fase 2 — Tracks 8/7 (humano + UI)**: ✅ A/B player + votos CSV + protocolo; UI thin en `ui/`
+  (servidor 127.0.0.1:8770). Tauri shell pendiente de toolchain Rust.
+- **Pendiente humano**: clips reales (decisión #3) y escucha Track 8 (decisión #12).
+  Detalle: `docs/ROADMAP-fase2.md`.
 
 ## Operations
 
