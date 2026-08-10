@@ -17,7 +17,7 @@
 
 ## 2. Estado actual (FUNCIONA)
 
-- **CLI `ims`**: `ims enhance in.wav -o out.wav` → exit 0, wav mejorado.
+- **CLI `voxera`**: `voxera enhance in.wav -o out.wav` → exit 0, wav mejorado.
   - Default: `deepfilternet` (DeepFilterNet2, pf=off) — **ganador del autoresearch** (pesq 3.275, rtf 0.084 CPU).
   - Alternativa: `--backend dpdfnet --model dpdfnet2 --attn-limit-db 24` (pesq 2.88, rtf 0.38).
   - Flags: `--backend`, `--model`, `--attn-limit-db`, `--pf`. Exit codes por spec: happy=0, unknown backend=2, bad path/formato/empty=1, falta -o/input=2.
@@ -72,7 +72,7 @@
 ```bash
 cd <proyecto>
 .venv-ims/Scripts/python.exe -m pytest tests/ -q          # 70 passed
-.venv-ims/Scripts/ims enhance media/test1.wav -o out.wav  # exit 0 (si media/ existe)
+.venv-ims/Scripts/voxera enhance media/test1.wav -o out.wav  # exit 0 (si media/ existe)
 git status -s                                             # limpio
 ./launch-swarm.sh                                         # si hace falta el swarm
 ```

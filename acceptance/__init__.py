@@ -1,1 +1,1 @@
-"""The ims acceptance pipeline (project-specific APS components)."""
+"""The voxera acceptance pipeline (project-specific APS components)."""

@@ -109,7 +109,7 @@ class TestGeneratedEntryPointRuns:
         out_dir = tmp_path / "generated"
         monkeypatch.setenv(FEATURE_PATH_ENV, "features/probe.feature")
         assert main([str(ir_path), str(out_dir)]) == 0
-        # The probe IR's step is not in the ims vocabulary -> must fail.
+        # The probe IR's step is not in the voxera vocabulary -> must fail.
         env = os.environ.copy()
         env["PYTHONPATH"] = str(Path(__file__).resolve().parent.parent)
         proc = subprocess.run(
