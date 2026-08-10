@@ -1,10 +1,17 @@
-# SwarmForge runtime state (per-machine)
-.swarmforge/
-.worktrees/
-
-# pi agent local state
-.pi/
-
 # autoresearch + model env (local)
+# Build artifacts (acceptance pipeline + project-local temp)
+# pi agent local state
+# Python
+# SwarmForge runtime state (per-machine)
+*.egg-info/
+*.py[cod]
 .auto/
+.pi/
+.pytest_cache/
+.swarmforge/
 .venv/
+.worktrees/
+__pycache__/
+acceptance/generated/
+build/
+tmp/

@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Normal acceptance run: parse features -> generate entry points -> run tests.
+# Usage: accept [features-dir] [--pytest-args "<args>"]
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$ROOT"
+# APS tools live in ~/swarmforge-bin (bb-based); make them findable.
+export PATH="$HOME/swarmforge-bin:$PATH"
+exec python -m acceptance.pipeline "$@"
