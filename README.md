@@ -15,15 +15,19 @@ uv venv --python 3.11 .venv-ims && uv pip install -p .venv-ims -e .
 .venv-ims/Scripts/ims enhance in.wav -o out.wav
 # tune the backend
 .venv-ims/Scripts/ims enhance in.wav -o out.wav --backend dpdfnet --model dpdfnet2 --attn-limit-db 24
+
+# GPU (opcional): instala los runtimes CUDA — pip install onnxruntime-gpu, o un build de torch con CUDA
 ```
 
 ## Backends (pluggable, metric-driven)
 
-| Backend | Runtime | Status | Pareto (pesq / rtf) |
-|---|---|---|---|
-| `dpdfnet` | ONNX, real-time CPU | ✅ default | dpdfnet2@attn24: **2.88 / 0.38** |
-| `deepfilternet` | Rust binary / Python | 🔄 autoresearch | **DeepFilterNet2 pf=off: 3.28 / 0.08** (leader) |
-| `resemble` | offline diffusion (GPU) | ⏳ pending eval | — |
+| Backend | Runtime | GPU | Status | Pareto (pesq / rtf) |
+|---|---|---|---|---|
+| `dpdfnet` | ONNX (real-time CPU) | ✅ vía `onnxruntime-gpu` (CUDA) | ✅ default | dpdfnet2@attn24: **2.88 / 0.38** |
+| `deepfilternet` | Rust binary / Python | ✅ Python + CUDA torch; binario Rust es CPU (ya rápido) | 🔄 autoresearch | **DeepFilterNet2 pf=off: 3.28 / 0.08** (líder) |
+| `resemble` | offline diffusion | ✅ CUDA recomendado (lento en CPU) | ⏳ pending eval | — |
+
+**GPU está soportado.** Esta máquina tiene una NVIDIA RTX 2060 6GB (torch CUDA 2.11). Los backends usan CUDA donde esté disponible: `pip install onnxruntime-gpu` para dpdfnet, torch con CUDA para deepfilternet/resemble. El CLI usa CPU por defecto (real-time); la aceleración GPU es una opción a nivel de entorno (un flag `--gpu` es un follow-up).
 
 Model/param selection is **empirical** (Pareto quality-vs-RTF on an ES+EN benchmark set), never assumed — see `.auto/` (autoresearch).
 
