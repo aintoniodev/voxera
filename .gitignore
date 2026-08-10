@@ -15,3 +15,6 @@ __pycache__/
 acceptance/generated/
 build/
 tmp/
+
+# model files (downloaded)
+models/

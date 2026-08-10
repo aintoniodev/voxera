@@ -43,9 +43,10 @@ def _validate_input(inp: Path) -> None:
 def enhance(
     input_path: str | Path,
     output_path: str | Path,
-    backend: str = "dpdfnet",
+    backend: str = "deepfilternet",
     model: str | None = None,
     attn_limit_db: float | None = None,
+    pf: bool | None = None,
 ) -> Path:
     """Enhance ``input_path`` and write the improved audio to ``output_path``.
 
@@ -82,6 +83,8 @@ def enhance(
         kwargs["model"] = model
     if attn_limit_db is not None:
         kwargs["attn_limit_db"] = attn_limit_db
+    if pf is not None:
+        kwargs["pf"] = pf
     impl = get_backend(backend, **kwargs)
     if impl is None:
         available = ", ".join(list_backends())

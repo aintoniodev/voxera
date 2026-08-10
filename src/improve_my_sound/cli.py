@@ -35,8 +35,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     enhance_parser.add_argument(
         "--backend",
-        default="dpdfnet",
-        help="enhancement backend (default: dpdfnet); the core validates the name",
+        default="deepfilternet",
+        help="enhancement backend (default: deepfilternet); the core validates the name",
     )
     enhance_parser.add_argument(
         "--model",
@@ -48,6 +48,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         help="dpdfnet attenuation limit in dB (default: 24)",
+    )
+    enhance_parser.add_argument(
+        "--pf",
+        action="store_true",
+        default=None,
+        help="deepfilternet post-filter (default: off — the measured Pareto winner)",
     )
     return parser
 
@@ -62,6 +68,9 @@ def main(argv: list[str] | None = None) -> int:
                 Path(args.input),
                 Path(args.output),
                 backend=args.backend,
+                model=args.model,
+                attn_limit_db=args.attn_limit_db,
+                pf=args.pf,
             )
         except UnknownBackendError as exc:
             print(f"{PROG}: error: {exc}", file=sys.stderr)
