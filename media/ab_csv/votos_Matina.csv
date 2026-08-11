@@ -1,0 +1,6 @@
+listener,clip,pair,side_a_file,side_b_file,preferred,blind,mos_a,mos_b,comment
+"Matina","test_pc5_conversacion","B vs C","test_pc5_conversacion_B.wav","test_pc5_conversacion_C.wav","B","false","3","3",""
+"Matina","test_pc4_martina","B vs C","test_pc4_martina_B.wav","test_pc4_martina_C.wav","tie","false","3","3",""
+"Matina","test_chorros","B vs C","test_chorros_C.wav","test_chorros_B.wav","A","false","3","3",""
+"Matina","test_metros","B vs C","test_metros_C.wav","test_metros_B.wav","B","false","3","3",""
+"Matina","test_pc2_grito","B vs C","test_pc2_grito_B.wav","test_pc2_grito_C.wav","B","false","3","3",""
