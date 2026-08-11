@@ -163,8 +163,17 @@ class Handler(BaseHTTPRequestHandler):
                         report = json.loads(score["stdout"])
                     except Exception:
                         report = None
+                # score the ORIGINAL too, so the UI can show the before->after delta
+                report_before = None
+                score_before = _run_cli(["score", str(up), "--format", "json"], timeout=300)
+                if score_before["exit"] == 0:
+                    try:
+                        report_before = json.loads(score_before["stdout"])
+                    except Exception:
+                        report_before = None
                 self._json({"ok": True, "url": f"/media/{out.name}", "original": up.name,
-                            "report": report, "stdout": result["stdout"]})
+                            "report": report, "report_before": report_before,
+                            "stdout": result["stdout"]})
                 return
             if path == "/score":
                 length = int(self.headers.get("Content-Length", 0))
