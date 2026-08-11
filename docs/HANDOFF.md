@@ -57,7 +57,10 @@
 - **Fase 2 COMPLETA**: tracks 0-8 implementados (196 tests, 25 escenarios APS).
   - **Benchmark real ejecutado** con los 15 clips de `media/` → `.auto/v2/reports/real.md` (decisión #3 ✅).
   - **Tests AB preparados**: 60 pares (A/B/C/D, -16 LUFS) en `.auto/human/conditions/` + `pairs.json`.
-  - **Tauri hecho**: `voxera-desktop/src-tauri/target/release/voxera-desktop.exe` (sidecar de ui/server.py).
+  - **Tauri hecho**: `voxera-desktop/src-tauri/target/release/voxera-desktop.exe` + instaladores
+  (MSI + NSIS setup) en `target/release/bundle/`; icono propio generado.
+- **Vídeo demo (40.5s, 1080p)**: `voxera-demo/` (Remotion, voz Piper ES, UI de voxera
+  reconstruida; render: `npx remotion render voxera-demo out/video.mp4`).
   - `ui/server.py` en 127.0.0.1:8770: /enhance /score /vote /media /pairs; ab-player con botones A/B.
 
 ## 5. Landmines operativos (NO volver a pisarlos)
