@@ -104,23 +104,32 @@ pesada diferida); la decisión #11 (de-plosive/dehum en Track 5) queda cerrada.
   clipping; ground truth): PESQ · STOI · ESTOI · SI-SDR (+ LUFS/TP/clipping) +
   RTFₘ/RTFₚ/RTFₑ. Ejecutado: DF2 pesq 3.07 · DF3 2.98 · dpdfnet 2.71 · DF2+master
   baja métricas de referencia (esperado: el master es para loudness/consistencia).
-- **B. Real-world** (`.auto/v2/real/*.wav` — clips de Antonio, decisión #3):
-  SNR est · speaker-sim (resemblyzer) · LUFS · TP · crest · RTFₑ.
+- **B. Real-world EJECUTADO con 15 clips reales de Antonio (media/, decisión #3
+  resuelta)**: `python .auto/v2/benchmark.py --suite real --real-dir media` →
+  `.auto/v2/reports/real.md` (5 modelos × 15 clips, LRU cache de outputs).
+  Hallazgos: DF3 deja test_pc4_martina (susurro) casi en silencio (TP -80 dB);
+  DF2+master lleva todo a LUFS -13/-16 con TP -1.0; speech_ratio 0.35-0.92.
 - Entregable: `.auto/v2/reports/{synthetic,real}.md`, **nunca fusionados**.
 
-### ✅ Track 8 — Evaluación humana *(infraestructura hecha; escucha pendiente de Antonio)*
-`ui/ab-player.html` (waveform, **división arrastrable** ORIGINAL|ENHANCED, blind,
-match loudness RMS, pairwise + MOS 1-5) + `ui/server.py` (POST /vote →
-`.auto/human/votes.csv`). Protocolo en `.auto/human/README.md`: 5–10 oyentes,
-10–20 clips reales, A=original/B=DF2/C=DF2+master/D=DF3, LUFS normalizado,
-umbral ≥60% para DF2+master vs DF2 (decisión #12 pendiente de confirmar).
+### ✅ Track 8 — Evaluación humana *(tests AB preparados y listos para escuchar)*
+`ui/ab-player.html` reescrito con **botones A/B** (la raya vertical no era
+práctica): selección A/B, play/pause, seek, blind X/Y, match loudness,
+pairwise + MOS 1-5. **60 pares generados** (`python .auto/v2/prepare_human.py`
+→ `.auto/human/conditions/<clip>_{A,B,C,D}.wav`, todos normalizados a -16 LUFS
++ `pairs.json`): por clip — B=DF2, C=DF2+master, D=DF3, A=original, pares
+B vs C (¿aporta el master?), B vs D (DF2 vs DF3), C vs D, A vs C.
+El player carga los pares desde `/pairs` y avanza solo tras votar (POST /vote
+→ `.auto/human/votes.csv`). Protocolo en `.auto/human/README.md`. Umbral ≥60%
+para DF2+master vs DF2 (decisión #12).
 
-### ✅ Track 7 — UI thin (Tauri pendiente de toolchain Rust) *(HTML hecho)*
-Sin cargo/rustc en esta máquina → UI thin en `ui/`: `index.html` (upload →
-preset → enhance → Voice Score con barras) + `ab-player.html` + `server.py`
-(wraps el CLI: /enhance, /score, /vote, /media). **El CLI sigue generando todo**
-(wavs A/B, JSON). Tauri completo queda documentado como pendiente: instalar
-rustup + `cargo tauri init` reutilizando `ui/`.
+### ✅ Track 7 — Tauri desktop (UI thin) *(hecho — exe funcional)*
+`voxera-desktop/` (Tauri v2, Rust 1.94): ventana 1100×750 que carga
+`http://127.0.0.1:8770` y **lanza `ui/server.py` como sidecar** al arrancar
+(cierra con la app vía taskkill del árbol). Build: `npm run tauri build --
+--no-bundle` → `voxera-desktop/src-tauri/target/release/voxera-desktop.exe`.
+El CLI sigue generando todo (wavs A/B, JSON) — la ventana es solo envoltura.
+El resto de la UI thin: `ui/index.html` + `ab-player.html` + `server.py`
+(/enhance, /score, /vote, /media, /pairs).
 
 ## Orden de implementación
 

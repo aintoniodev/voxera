@@ -474,7 +474,7 @@ Research metrics (→ benchmark track 6, nunca en el score de producto)
 
 ## Track 6 — Benchmark `.auto` v2 *(sintético y real SEPARADOS)*
 
-**Estado: hecho (fase 2).** `.auto/v2/`: `build_synthetic.py` + `benchmark.py --suite synthetic|real` → `.auto/v2/reports/{synthetic,real}.md` (nunca fusionados). Primer resultado synthetic: DF2 pesq 3.07 / DF3 2.98 / dpdfnet 2.71; DF2+master baja métricas de referencia (esperado — el master es para loudness/consistencia, se valida en Track 8).
+**Estado: hecho (fase 2).** `.auto/v2/`: `build_synthetic.py` + `benchmark.py --suite synthetic|real` → `.auto/v2/reports/{synthetic,real}.md` (nunca fusionados). Synthetic: DF2 pesq 3.07 / DF3 2.98 / dpdfnet 2.71. **Real: 15 clips de `media/` ejecutados** (DF3 degrada test_pc4_martina a casi silencio; master lleva todo a -13/-16 LUFS TP -1.0).
 
 No mezclar "clean artificial + degradación artificial" con audio real como si fueran equivalentes. Dos suites independientes, dos reportes.
 
@@ -508,7 +508,7 @@ Dataset: clips reales del usuario (mic/phone/webcam/room/fan/AC…); 30–100 cl
 
 ## Track 7 — Tauri desktop (UI thin)
 
-**Estado: UI thin HTML hecha (fase 2); shell Tauri pendiente de toolchain Rust.** `ui/`: index.html (upload→enhance→score), ab-player.html, server.py (envuelve el CLI: /enhance, /score, /vote, /media). El CLI genera todo; Tauri solo envolvería `ui/` cuando rustup esté instalado.
+**Estado: hecho (fase 2).** `voxera-desktop/` (Tauri v2): ventana que carga la UI local y lanza `ui/server.py` como sidecar (se cierra con la app). Exe: `voxera-desktop/src-tauri/target/release/voxera-desktop.exe`.
 
 - Sidecar del CLI; **todo lo que renderiza lo genera el CLI** (wavs A/B, JSON de analyze/score).
 - Pantalla 1: upload (audio/vídeo) + preset + enhance.
@@ -521,7 +521,7 @@ Dataset: clips reales del usuario (mic/phone/webcam/room/fan/AC…); 30–100 cl
 
 ## Track 8 — Evaluación humana *(nuevo)*
 
-**Estado: infraestructura hecha (fase 2); la escucha requiere clips reales (decisión #3) y oyentes (decisión #12).** `ui/ab-player.html` + `ui/server.py` (POST /vote → `.auto/human/votes.csv`) + protocolo en `.auto/human/README.md`.
+**Estado: tests AB preparados (fase 2); falta la escucha (decisión #12).** `ui/ab-player.html` con botones A/B; 60 pares listos en `.auto/human/conditions/` (A/B/C/D normalizados a -16 LUFS) + `pairs.json`; `prepare_human.py` regenera las condiciones.
 
 > La métrica definitiva de Voxera: **que alguien prefiera la voz B**.
 
@@ -566,7 +566,7 @@ Track 0 (rename) → Track 1A (fundaciones I/O + determinismo + device)
 |---|---|---|---|
 | 1 | ~~¿`creator` como preset por defecto de `enhance --preset`?~~ | `creator`, -16 LUFS | ✅ resuelta (implementado) |
 | 2 | ¿Target LUFS de `social`: -14 (TikTok/IG reales) confirmado? | -14 | abierta |
-| 3 | ¿Voz real para benchmark v2: puede grabar 10–30 clips (mic, phone, room, fan, AC)? | sí | ◐ infraestructura lista (`.auto/v2/real/`); faltan los clips |
+| 3 | ~~¿Voz real para benchmark v2?~~ | sí | ✅ resuelta: 15 clips reales en `media/` (10 wav + 5 mp3), benchmark real ejecutado |
 | 4 | ~~¿Renombrar el repo a `voxera` o mantener `improve-my-sound` como repo?~~ | repo ya renombrado (`aintoniodev/voxera`) | ✅ resuelta |
 | 5 | ~~De-esser: umbral por preset, max att 6 dB, tolerancia 2-5 kHz (5%)~~ | 5% | ✅ resuelta (implementado, test CI) |
 | 6 | ~~Exit codes: `VOXERA_NO_SPEECH = 20`~~ | 20 | ✅ resuelta (implementado: master + enhance con pipeline) |

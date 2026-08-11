@@ -19,3 +19,8 @@ tmp/
 # model files (downloaded)
 models/
 .venv-re21/
+
+# Tauri desktop build (voxera-desktop)
+voxera-desktop/node_modules/
+voxera-desktop/dist/
+voxera-desktop/src-tauri/target/

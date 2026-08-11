@@ -53,10 +53,32 @@ class TestFormatPolicy:
             audioio.load_audio(tmp_path / "nope.wav")
 
     def test_unsupported_extension_rejected(self, tmp_path):
-        p = tmp_path / "clip.mp3"
+        p = tmp_path / "clip.xyz"
         p.write_bytes(b"x")
         with pytest.raises(EnhancementError, match="unsupported format"):
             audioio.load_audio(p)
+
+    def test_mp3_decoded_via_ffmpeg(self, tmp_path):
+        """Los .mp3 se decodifican con ffmpeg a 48k mono (Track 4 machinery)."""
+        import shutil
+
+        if not shutil.which("ffmpeg") and not Path("C:/ffmpeg/bin/ffmpeg.exe").exists():
+            pytest.skip("ffmpeg required")
+        import subprocess
+
+        wav = tmp_path / "s.wav"
+        import soundfile as sf
+
+        sf.write(str(wav), s.speech_like(1.0), 48000)
+        mp3 = tmp_path / "s.mp3"
+        subprocess.run(
+            [shutil.which("ffmpeg") or "C:/ffmpeg/bin/ffmpeg.exe", "-y", "-v", "error",
+             "-i", str(wav), "-b:a", "128k", str(mp3)],
+            check=True, capture_output=True,
+        )
+        data = audioio.load_audio(mp3)
+        assert data.samples.ndim == 1
+        assert abs(len(data.samples) / 48000 - 1.0) < 0.05
 
 
 class TestStereoDownmix:
