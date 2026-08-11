@@ -32,3 +32,7 @@ voxera-desktop/src-tauri/target/
 !.auto/v2/
 .auto/v2/*
 !.auto/v2/*.py
+
+# demo video (Remotion)
+voxera-demo/node_modules/
+voxera-demo/out/

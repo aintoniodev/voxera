@@ -691,6 +691,9 @@ def _cmd_inspect(args) -> int:
         print("  · noisy input → voxera enhance --preset creator")
     if snr is not None and snr >= 15:
         print("  · decent signal → voxera master --preset youtube")
+    nt = art["noise_type"]
+    if nt["stationary"] and nt["type"] in ("fan", "ac", "hiss", "hum"):
+        print("  · ruido estacionario (" + nt["type"] + ") → voxera enhance --preset bad-room (o DF2 solo)")
     return 0
 
 
