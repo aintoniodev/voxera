@@ -27,7 +27,7 @@
 </style>
 </head>
 <body>
-<h1>voxera · A/B player <span class="tag">botones A/B · blind · MOS</span></h1>
+<h1>voxera · A/B player <span class="tag">botones A/B · blind · MOS</span> <a href="/" style="float:right;font-size:13px">← volver</a></h1>
 
 <div class="card">
   <div class="row">
@@ -73,11 +73,14 @@
     <button id="voteB" class="side onB">Prefiero B</button>
   </div>
   <div class="row">
-    <span class="tag">MOS A (1-5):</span> <input type="range" id="mosA" min="1" max="5" step="1" value="3">
+    <span class="tag" title="MOS: 1=pésimo · 2=malo · 3=aceptable · 4=bueno · 5=excelente">MOS A (1-5):</span>
+    <input type="range" id="mosA" min="1" max="5" step="1" value="3" title="1=pésimo · 2=malo · 3=aceptable · 4=bueno · 5=excelente">
     <span id="mosAv">3</span>
-    <span class="tag">MOS B:</span> <input type="range" id="mosB" min="1" max="5" step="1" value="3">
+    <span class="tag" title="MOS: 1=pésimo · 2=malo · 3=aceptable · 4=bueno · 5=excelente">MOS B:</span>
+    <input type="range" id="mosB" min="1" max="5" step="1" value="3" title="1=pésimo · 2=malo · 3=aceptable · 4=bueno · 5=excelente">
     <span id="mosBv">3</span>
   </div>
+  <div class="tag" style="margin-bottom:8px">MOS (Mean Opinion Score): 1 = pésimo · 2 = malo · 3 = aceptable · 4 = bueno · 5 = excelente</div>
   <div class="row"><span class="tag">Comentario:</span> <input type="text" id="comment" size="50" placeholder="opcional"></div>
   <div class="row"><button id="submit" class="primary">Enviar voto → CSV</button> <span id="status"></span></div>
 </div>
@@ -86,19 +89,31 @@
 const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
 let bufA = null, bufB = null, durA = 0, durB = 0;
 let side = "A", blind = false, matchLoud = false, preferred = null;
-let ac = null, src = null, gain = null, playing = false, playStart = 0, playPos = 0;
+// single persistent graph: source -> master gain -> destination.
+let ac = null, master = null, src = null, playing = false, playStart = 0, playPos = 0;
 let gainScaleA = 1, gainScaleB = 1, curPair = null;
 
 async function loadFile(input, which) {
   const f = input.files[0]; if (!f) return;
   const arr = await f.arrayBuffer();
-  ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+  await loadBuffer(arr, which);
+}
+async function loadBuffer(arr, which) {
+  ensureGraph();
   const buf = await ac.decodeAudioData(arr);
   if (which === "A") { bufA = buf; durA = buf.duration; }
   else { bufB = buf; durB = buf.duration; }
   if (bufA && bufB) document.getElementById("vote").style.display = "block";
   applyLoudnessMatch();
   draw();
+}
+function ensureGraph() {
+  if (!ac) {
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    master = ac.createGain();
+    master.gain.value = 1;
+    master.connect(ac.destination);
+  }
 }
 function applyLoudnessMatch() {
   gainScaleA = gainScaleB = 1;
@@ -145,8 +160,7 @@ function draw() {
     ctx.fillStyle = "#fff"; ctx.fillRect(px - 1, 0, 2, H);
   }
   document.getElementById("time").textContent = fmt(playing ? playPos : 0) + " / " + fmt(currentDur() || 0);
-  const maxDur = Math.max(durA || 0, durB || 0);
-  if (maxDur) document.getElementById("seek").value = Math.round((playPos / maxDur) * 1000);
+  if (dur) document.getElementById("seek").value = Math.round((playPos / dur) * 1000);
 }
 function updateSel() {
   document.getElementById("sel").textContent = "seleccionado: " + (blind ? (side === "A" ? "X" : "Y") : side);
@@ -154,41 +168,51 @@ function updateSel() {
   document.getElementById("btnB").className = "side " + (side === "B" ? "onB" : "");
   draw();
 }
-function switchSide(newSide) {
-  const wasPlaying = playing;
-  if (wasPlaying) stop();
-  side = newSide;
-  updateSel();
-  if (wasPlaying && currentBuf()) play();
+// --- audio core: exactly one source and one gain node in the graph ---
+function teardown() {
+  if (src) {
+    try { src.onended = null; src.stop(); } catch (e) {}
+    try { src.disconnect(); } catch (e) {}
+    src = null;
+  }
 }
 function play() {
   const buf = currentBuf();
   if (!buf) { document.getElementById("status").textContent = "carga A y B primero"; return; }
-  ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+  ensureGraph();
   ac.resume();
-  stopSources();
-  src = ac.createBufferSource(); src.buffer = buf;
-  gain = ac.createGain(); gain.gain.value = currentScale();
-  src.connect(gain).connect(ac.destination);
-  const offset = Math.min(playPos, buf.duration - 0.01);
-  src.start(0, Math.max(0, offset));
-  playStart = ac.currentTime - Math.max(0, offset);
+  teardown();
+  const s = ac.createBufferSource();
+  s.buffer = buf;
+  s.connect(master);                 // always the SAME master gain node
+  master.gain.value = currentScale();
+  const offset = Math.max(0, Math.min(playPos, buf.duration - 0.02));
+  s.start(0, offset);
+  s.onended = () => { if (src === s) playing = false; };
+  src = s;
+  playStart = ac.currentTime - offset;
   playing = true;
   requestAnimationFrame(tick);
 }
 function tick() {
   if (!playing) return;
   playPos = ac.currentTime - playStart;
-  if (playPos > currentDur()) { stop(); return; }
+  if (playPos >= currentDur()) { stop(); return; }
   draw();
   requestAnimationFrame(tick);
 }
-function stopSources() { if (src) { try { src.stop(); } catch (e) {} src = null; } }
-function stop() { playing = false; stopSources(); playPos = 0; draw(); }
+function stop() { playing = false; teardown(); playPos = 0; draw(); }
+function switchSide(newSide) {
+  const wasPlaying = playing;
+  if (wasPlaying) teardown();        // keep playPos: continue at same point
+  side = newSide;
+  updateSel();
+  if (wasPlaying && currentBuf()) play();
+}
 document.getElementById("seek").oninput = e => {
   const dur = currentDur() || 0;
   playPos = (e.target.value / 1000) * dur;
-  if (playing) { play(); }  // restart at new position
+  if (playing) play();               // restart at the new position (same graph)
   draw();
 };
 document.getElementById("play").onclick = () => playing ? stop() : play();
@@ -210,14 +234,35 @@ document.getElementById("matchLoud").onclick = function () {
 document.getElementById("fileA").onchange = () => loadFile(document.getElementById("fileA"), "A");
 document.getElementById("fileB").onchange = () => loadFile(document.getElementById("fileB"), "B");
 
+// --- deep link: ?a=<media file>&b=<media file> (e.g. from index.html / Tauri) ---
+async function loadDeepLink() {
+  const params = new URLSearchParams(location.search);
+  const a = params.get("a"), b = params.get("b");
+  if (!a && !b) return;
+  const fetchBuf = async (name) => {
+    const r = await fetch("/media/" + encodeURIComponent(name));
+    if (!r.ok) throw new Error("no se pudo cargar " + name);
+    return r.arrayBuffer();
+  };
+  try {
+    if (a) await loadBuffer(await fetchBuf(a), "A");
+    if (b) await loadBuffer(await fetchBuf(b), "B");
+    document.getElementById("clipId").value = (a || "").replace(/\.(wav|mp3|m4a)$/i, "");
+    document.getElementById("pairInfo").textContent = (a || "?") + " vs " + (b || "?");
+  } catch (e) {
+    document.getElementById("status").textContent = "error deep link: " + e.message;
+  }
+}
+
 // --- pairs mode (served by ui/server.py) ---
+let pairsList = [];
 async function loadPairs() {
   try {
     const r = await fetch("/pairs");
-    const pairs = await r.json();
-    if (!pairs.length) return;
+    pairsList = await r.json();
+    if (!pairsList.length) return;
     const sel = document.getElementById("pairs");
-    sel.innerHTML = pairs.map((p, i) =>
+    sel.innerHTML = pairsList.map((p, i) =>
       `<option value="${i}">${p.clip} · ${p.pair}</option>`).join("");
     document.getElementById("pairsRow").style.display = "flex";
   } catch (e) { /* standalone mode: no server */ }
@@ -226,34 +271,27 @@ async function loadPairFiles() {
   const sel = document.getElementById("pairs");
   if (!sel.options.length) return;
   curPair = pairsList[+sel.value];
-  const label = document.getElementById("lblA");
   blind = false;
   document.getElementById("blind").textContent = "Blind: OFF";
-  label.textContent = "A"; document.getElementById("lblB").textContent = "B";
+  document.getElementById("lblA").textContent = "A";
+  document.getElementById("lblB").textContent = "B";
   updateSel();
-  const load = async (url, which) => {
-    const r = await fetch(url);
+  const load = async (name, which) => {
+    const r = await fetch("/media/" + encodeURIComponent(name));
     const arr = await r.arrayBuffer();
-    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
-    const buf = await ac.decodeAudioData(arr);
-    if (which === "A") { bufA = buf; durA = buf.duration; }
-    else { bufB = buf; durB = buf.duration; }
+    await loadBuffer(arr, which);
   };
-  await load("/media/" + curPair.a, "A");
-  await load("/media/" + curPair.b, "B");
+  await load(curPair.a, "A");
+  await load(curPair.b, "B");
   document.getElementById("clipId").value = curPair.clip + ":" + curPair.pair;
   document.getElementById("pairInfo").textContent = curPair.a + " vs " + curPair.b;
   document.getElementById("vote").style.display = "block";
   applyLoudnessMatch();
   draw();
 }
-let pairsList = [];
 window.addEventListener("load", async () => {
-  try {
-    const r = await fetch("/pairs");
-    pairsList = await r.json();
-    loadPairs();
-  } catch (e) {}
+  await loadPairs();
+  await loadDeepLink();
 });
 document.getElementById("loadPair").onclick = loadPairFiles;
 
@@ -284,7 +322,6 @@ document.getElementById("submit").onclick = async function () {
     const t = await r.text();
     document.getElementById("status").textContent = r.ok ? "voto guardado ✓ " + t : "error: " + t;
     if (r.ok && curPair && pairsList.length) {
-      // advance to the next pair automatically
       const sel = document.getElementById("pairs");
       if (+sel.value < pairsList.length - 1) { sel.value = +sel.value + 1; loadPairFiles(); }
     }
