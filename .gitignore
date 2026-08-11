@@ -24,3 +24,9 @@ models/
 voxera-desktop/node_modules/
 voxera-desktop/dist/
 voxera-desktop/src-tauri/target/
+
+# benchmark v2 tooling (scripts SI, artefactos NO)
+.auto/
+!.auto/
+!.auto/v2/
+!.auto/v2/*.py
