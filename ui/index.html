@@ -45,8 +45,7 @@
   <div class="tag" style="margin-top:12px">Audio procesado:</div>
   <audio id="player" controls></audio>
   <div class="tag" style="margin-top:8px">
-    Compara A/B (división arrastrable): <a href="/ab-player.html" target="_blank">abrir A/B player</a> —
-    carga el original y <span id="outName"></span>
+    Compara A/B (botones A/B): <a id="abLink" href="/ab-player.html">abrir A/B player con este audio</a>
   </div>
 </div>
 
@@ -65,7 +64,7 @@ $("go").onclick = async function () {
     if (!data.ok) { $("status").textContent = "error: " + data.error; return; }
     $("result").style.display = "block";
     $("player").src = data.url;
-    $("outName").textContent = data.url.split("/").pop();
+    $("abLink").href = "/ab-player.html?a=" + encodeURIComponent(data.original || "") + "&b=" + encodeURIComponent(data.url.split("/").pop());
     if (data.report && data.report.score) {
       const s = data.report.score;
       $("cvs").textContent = Math.round(s.cvs);

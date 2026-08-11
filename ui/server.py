@@ -143,7 +143,10 @@ class Handler(BaseHTTPRequestHandler):
                 if not fname:
                     self._json({"ok": False, "error": "no file uploaded"}, 400)
                     return
-                out = MEDIA_DIR / f"out_{int(time.time())}{up.suffix or '.wav'}"
+                # the CLI always writes WAV (48k/24-bit); video inputs produce mp4
+                is_video = Path(fname).suffix.lower() in (".mp4", ".mov", ".mkv", ".webm", ".m4v")
+                out_suffix = ".mp4" if is_video else ".wav"
+                out = MEDIA_DIR / f"out_{int(time.time())}_{Path(up.name).stem}{out_suffix}"
                 cmd = [command, str(up), "-o", str(out)]
                 if command == "enhance":
                     cmd += ["--preset", preset]
@@ -160,8 +163,8 @@ class Handler(BaseHTTPRequestHandler):
                         report = json.loads(score["stdout"])
                     except Exception:
                         report = None
-                self._json({"ok": True, "url": f"/media/{out.name}", "report": report,
-                            "stdout": result["stdout"]})
+                self._json({"ok": True, "url": f"/media/{out.name}", "original": up.name,
+                            "report": report, "stdout": result["stdout"]})
                 return
             if path == "/score":
                 length = int(self.headers.get("Content-Length", 0))
