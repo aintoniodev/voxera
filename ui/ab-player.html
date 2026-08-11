@@ -6,40 +6,59 @@
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
-  body { font-family: system-ui, sans-serif; background: #111; color: #ddd; margin: 0; padding: 20px; }
+  body { font-family: system-ui, sans-serif; background: #111; color: #ddd; margin: 0; padding: 20px; max-width: 860px; margin: 0 auto; }
   h1 { font-size: 18px; color: #7c5cff; }
   .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
   .card { background: #1a1a1e; border: 1px solid #2a2a30; border-radius: 10px; padding: 16px; margin: 12px 0; }
-  button { background: #2a2a30; color: #eee; border: 1px solid #3a3a44; border-radius: 6px; padding: 7px 14px; cursor: pointer; }
+  button { background: #2a2a30; color: #eee; border: 1px solid #3a3a44; border-radius: 6px; padding: 7px 14px; cursor: pointer; font-size: 14px; }
   button:hover { background: #35353d; }
   button.primary { background: #7c5cff; border-color: #7c5cff; color: #fff; }
-  input[type=file], input[type=text] { background: #222; color: #ddd; border: 1px solid #3a3a44; border-radius: 6px; padding: 6px; }
-  canvas { width: 100%; height: 220px; background: #0c0c10; border-radius: 8px; cursor: col-resize; display: block; }
+  button.side { min-width: 90px; padding: 14px 18px; font-size: 17px; font-weight: 700; border-radius: 10px; }
+  button.side.onA { background: #1d3a5f; border-color: #7ab8ff; color: #7ab8ff; }
+  button.side.onB { background: #4a2f12; border-color: #ffb35c; color: #ffb35c; }
+  input[type=file], input[type=text], select { background: #222; color: #ddd; border: 1px solid #3a3a44; border-radius: 6px; padding: 6px; }
+  canvas { width: 100%; height: 200px; background: #0c0c10; border-radius: 8px; display: block; }
   .tag { font-size: 12px; color: #999; }
   .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; }
   .badge.a { background: #1d3a5f; color: #7ab8ff; }
   .badge.b { background: #4a2f12; color: #ffb35c; }
+  #seek { width: 100%; }
   #vote { display: none; }
 </style>
 </head>
 <body>
-<h1>voxera · A/B player <span class="tag">ORIGINAL | ENHANCED · división arrastrable · blind</span></h1>
+<h1>voxera · A/B player <span class="tag">botones A/B · blind · MOS</span></h1>
 
-<div class="row">
-  <label class="badge a" id="lblA">A</label>
-  <input type="file" id="fileA" accept="audio/*,.wav,.mp3,.m4a">
-  <label class="badge b" id="lblB">B</label>
-  <input type="file" id="fileB" accept="audio/*,.wav,.mp3,.m4a">
-  <button id="blind">Blind: OFF</button>
-  <button id="matchLoud">Match loudness: OFF</button>
-  <button id="play" class="primary">▶ Play</button>
-  <button id="stop">■ Stop</button>
-  <span class="tag" id="time">0:00 / 0:00</span>
+<div class="card">
+  <div class="row">
+    <label class="badge a" id="lblA">A</label>
+    <input type="file" id="fileA" accept="audio/*,.wav,.mp3,.m4a">
+    <label class="badge b" id="lblB">B</label>
+    <input type="file" id="fileB" accept="audio/*,.wav,.mp3,.m4a">
+    <button id="blind">Blind: OFF</button>
+    <button id="matchLoud">Match loudness: OFF</button>
+  </div>
+  <div class="row" id="pairsRow" style="display:none">
+    <span class="tag">Pares preparados:</span>
+    <select id="pairs"></select>
+    <button id="loadPair" class="primary">Cargar par</button>
+    <span class="tag" id="pairInfo"></span>
+  </div>
 </div>
 
 <div class="card">
-  <canvas id="cv" width="1200" height="440"></canvas>
-  <div class="tag" id="hint">Arrastra la división vertical: a la izquierda suena A, a la derecha suena B.</div>
+  <div class="row" style="justify-content:center">
+    <button class="side" id="btnA">A</button>
+    <button id="play" class="primary">▶</button>
+    <button id="stop">■</button>
+    <button class="side" id="btnB">B</button>
+  </div>
+  <canvas id="cv" width="1200" height="400"></canvas>
+  <input type="range" id="seek" min="0" max="1000" value="0">
+  <div class="row" style="justify-content:space-between">
+    <span class="tag" id="time">0:00 / 0:00</span>
+    <span class="tag" id="sel">seleccionado: A</span>
+  </div>
 </div>
 
 <div class="card" id="vote">
@@ -48,10 +67,10 @@
     <span class="tag">Oyente:</span> <input type="text" id="listener" placeholder="tu nombre">
     <span class="tag">Clip id:</span> <input type="text" id="clipId" placeholder="p.ej. room_fan_01">
   </div>
-  <div class="row">
-    <button id="voteA">Prefiero A</button>
-    <button id="voteB">Prefiero B</button>
-    <button id="voteTie">Empate</button>
+  <div class="row" style="justify-content:center">
+    <button id="voteA" class="side onA">Prefiero A</button>
+    <button id="voteTie" class="side">Empate</button>
+    <button id="voteB" class="side onB">Prefiero B</button>
   </div>
   <div class="row">
     <span class="tag">MOS A (1-5):</span> <input type="range" id="mosA" min="1" max="5" step="1" value="3">
@@ -65,10 +84,10 @@
 
 <script>
 const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
-let bufA = null, bufB = null, durA = 0, durB = 0, tDiv = 0;
-let blind = false, matchLoud = false;
-let ac = null, srcA = null, srcB = null, gainA = null, gainB = null, playing = false, playStart = 0, playPos = 0;
-let gainScaleA = 1, gainScaleB = 1;
+let bufA = null, bufB = null, durA = 0, durB = 0;
+let side = "A", blind = false, matchLoud = false, preferred = null;
+let ac = null, src = null, gain = null, playing = false, playStart = 0, playPos = 0;
+let gainScaleA = 1, gainScaleB = 1, curPair = null;
 
 async function loadFile(input, which) {
   const f = input.files[0]; if (!f) return;
@@ -77,7 +96,7 @@ async function loadFile(input, which) {
   const buf = await ac.decodeAudioData(arr);
   if (which === "A") { bufA = buf; durA = buf.duration; }
   else { bufB = buf; durB = buf.duration; }
-  if (durA && durB) tDiv = Math.min(durA, durB) / 2;
+  if (bufA && bufB) document.getElementById("vote").style.display = "block";
   applyLoudnessMatch();
   draw();
 }
@@ -94,12 +113,15 @@ function rms(buf) {
   return Math.sqrt(s / Math.ceil(d.length / 16));
 }
 function fmt(s) { s = Math.max(0, s); return Math.floor(s / 60) + ":" + (s % 60).toFixed(1).padStart(4, "0"); }
+function currentBuf() { return side === "A" ? bufA : bufB; }
+function currentDur() { return side === "A" ? durA : durB; }
+function currentScale() { return side === "A" ? gainScaleA : gainScaleB; }
 
-function drawWave(buf, color, offsetY, h, scale) {
+function drawWave(buf, color, offsetY, h, scale, dim) {
   if (!buf) return;
   const d = buf.getChannelData(0), W = cv.width, n = d.length;
-  const cols = W, block = Math.floor(n / cols);
-  ctx.fillStyle = color;
+  const cols = W, block = Math.max(1, Math.floor(n / cols));
+  ctx.fillStyle = dim ? color + "44" : color;
   for (let x = 0; x < cols; x++) {
     let mn = 1, mx = -1;
     const start = x * block;
@@ -112,99 +134,141 @@ function drawWave(buf, color, offsetY, h, scale) {
 function draw() {
   ctx.clearRect(0, 0, cv.width, cv.height);
   const W = cv.width, H = cv.height;
-  if (bufA) drawWave(bufA, "#7ab8ff", 0, H / 2 - 10, gainScaleA);
-  if (bufB) drawWave(bufB, "#ffb35c", H / 2 + 10, H / 2 - 10, gainScaleB);
+  drawWave(bufA, "#7ab8ff", 0, H / 2 - 10, gainScaleA, side !== "A");
+  drawWave(bufB, "#ffb35c", H / 2 + 10, H / 2 - 10, gainScaleB, side !== "B");
   ctx.fillStyle = "#111"; ctx.fillRect(0, H / 2 - 6, W, 12);
-  // divider
-  const x = W * (durA + durB ? tDiv / (Math.max(durA, durB) || 1) : 0.5);
-  ctx.fillStyle = "#7c5cff"; ctx.fillRect(x - 2, 0, 4, H);
-  ctx.fillStyle = "#999"; ctx.font = "13px system-ui";
-  ctx.fillText("A", 10, 16); ctx.fillText("B", 10, H - 8);
-  // playhead
-  if (playing) {
-    const px = W * (playPos / (Math.max(durA, durB) || 1));
+  ctx.fillStyle = side === "A" ? "#7ab8ff" : "#ffb35c"; ctx.font = "bold 15px system-ui";
+  ctx.fillText(side === "A" ? (blind ? "X" : "A") : (blind ? "Y" : "B"), 10, 18);
+  const dur = Math.max(durA, durB);
+  if (playing && dur) {
+    const px = W * (playPos / dur);
     ctx.fillStyle = "#fff"; ctx.fillRect(px - 1, 0, 2, H);
   }
-  const total = Math.max(durA, durB);
-  document.getElementById("time").textContent = fmt(playing ? playPos : 0) + " / " + fmt(total);
+  document.getElementById("time").textContent = fmt(playing ? playPos : 0) + " / " + fmt(currentDur() || 0);
+  const maxDur = Math.max(durA || 0, durB || 0);
+  if (maxDur) document.getElementById("seek").value = Math.round((playPos / maxDur) * 1000);
 }
-// divider drag
-let dragging = false;
-cv.addEventListener("mousedown", e => { dragging = true; });
-window.addEventListener("mousemove", e => {
-  if (!dragging || !durA || !durB) return;
-  const r = cv.getBoundingClientRect();
-  const frac = (e.clientX - r.left) / r.width;
-  tDiv = frac * Math.max(durA, durB);
-  if (playing) reschedule();
+function updateSel() {
+  document.getElementById("sel").textContent = "seleccionado: " + (blind ? (side === "A" ? "X" : "Y") : side);
+  document.getElementById("btnA").className = "side " + (side === "A" ? "onA" : "");
+  document.getElementById("btnB").className = "side " + (side === "B" ? "onB" : "");
   draw();
-});
-window.addEventListener("mouseup", () => dragging = false);
-
-function schedule() {
-  const t0 = ac.currentTime;
-  gainA.gain.cancelScheduledValues(t0); gainB.gain.cancelScheduledValues(t0);
-  gainA.gain.setValueAtTime(1, t0); gainB.gain.setValueAtTime(0, t0);
-  const tSwitch = t0 + (tDiv - playPos);
-  if (tSwitch > t0 + 0.01 && tSwitch < t0 + Math.max(durA, durB)) {
-    gainA.gain.setValueAtTime(1, tSwitch); gainA.gain.linearRampToValueAtTime(0, tSwitch + 0.005);
-    gainB.gain.setValueAtTime(0, tSwitch); gainB.gain.linearRampToValueAtTime(1, tSwitch + 0.005);
-  }
 }
-function reschedule() {
-  if (!playing) return;
-  try { schedule(); } catch (e) { /* context suspended */ }
+function switchSide(newSide) {
+  const wasPlaying = playing;
+  if (wasPlaying) stop();
+  side = newSide;
+  updateSel();
+  if (wasPlaying && currentBuf()) play();
 }
-async function play() {
-  if (!bufA || !bufB) { document.getElementById("status").textContent = "carga A y B primero"; return; }
+function play() {
+  const buf = currentBuf();
+  if (!buf) { document.getElementById("status").textContent = "carga A y B primero"; return; }
   ac = ac || new (window.AudioContext || window.webkitAudioContext)();
-  await ac.resume();
+  ac.resume();
   stopSources();
-  srcA = ac.createBufferSource(); srcB = ac.createBufferSource();
-  srcA.buffer = bufA; srcB.buffer = bufB;
-  gainA = ac.createGain(); gainB = ac.createGain();
-  const gA = ac.createGain(); gA.gain.value = gainScaleA;
-  const gB = ac.createGain(); gB.gain.value = gainScaleB;
-  srcA.connect(gA).connect(gainA).connect(ac.destination);
-  srcB.connect(gB).connect(gainB).connect(ac.destination);
-  const offset = playPos;
-  srcA.start(0, offset); srcB.start(0, offset);
-  playStart = ac.currentTime - offset; playing = true; schedule();
+  src = ac.createBufferSource(); src.buffer = buf;
+  gain = ac.createGain(); gain.gain.value = currentScale();
+  src.connect(gain).connect(ac.destination);
+  const offset = Math.min(playPos, buf.duration - 0.01);
+  src.start(0, Math.max(0, offset));
+  playStart = ac.currentTime - Math.max(0, offset);
+  playing = true;
   requestAnimationFrame(tick);
 }
 function tick() {
   if (!playing) return;
   playPos = ac.currentTime - playStart;
-  if (playPos > Math.max(durA, durB)) { stop(); return; }
+  if (playPos > currentDur()) { stop(); return; }
   draw();
   requestAnimationFrame(tick);
 }
-function stopSources() { if (srcA) { try { srcA.stop(); } catch (e) {} srcA = null; } if (srcB) { try { srcB.stop(); } catch (e) {} srcB = null; } }
+function stopSources() { if (src) { try { src.stop(); } catch (e) {} src = null; } }
 function stop() { playing = false; stopSources(); playPos = 0; draw(); }
-
-document.getElementById("play").onclick = play;
+document.getElementById("seek").oninput = e => {
+  const dur = currentDur() || 0;
+  playPos = (e.target.value / 1000) * dur;
+  if (playing) { play(); }  // restart at new position
+  draw();
+};
+document.getElementById("play").onclick = () => playing ? stop() : play();
 document.getElementById("stop").onclick = stop;
+document.getElementById("btnA").onclick = () => switchSide("A");
+document.getElementById("btnB").onclick = () => switchSide("B");
 document.getElementById("blind").onclick = function () {
   blind = !blind;
   this.textContent = "Blind: " + (blind ? "ON" : "OFF");
   document.getElementById("lblA").textContent = blind ? "X" : "A";
   document.getElementById("lblB").textContent = blind ? "Y" : "B";
+  updateSel();
 };
 document.getElementById("matchLoud").onclick = function () {
   matchLoud = !matchLoud;
   this.textContent = "Match loudness: " + (matchLoud ? "ON" : "OFF");
   applyLoudnessMatch(); draw();
 };
-document.getElementById("fileA").onchange = () => { loadFile(document.getElementById("fileA"), "A"); document.getElementById("vote").style.display = "block"; };
+document.getElementById("fileA").onchange = () => loadFile(document.getElementById("fileA"), "A");
 document.getElementById("fileB").onchange = () => loadFile(document.getElementById("fileB"), "B");
+
+// --- pairs mode (served by ui/server.py) ---
+async function loadPairs() {
+  try {
+    const r = await fetch("/pairs");
+    const pairs = await r.json();
+    if (!pairs.length) return;
+    const sel = document.getElementById("pairs");
+    sel.innerHTML = pairs.map((p, i) =>
+      `<option value="${i}">${p.clip} · ${p.pair}</option>`).join("");
+    document.getElementById("pairsRow").style.display = "flex";
+  } catch (e) { /* standalone mode: no server */ }
+}
+async function loadPairFiles() {
+  const sel = document.getElementById("pairs");
+  if (!sel.options.length) return;
+  curPair = pairsList[+sel.value];
+  const label = document.getElementById("lblA");
+  blind = false;
+  document.getElementById("blind").textContent = "Blind: OFF";
+  label.textContent = "A"; document.getElementById("lblB").textContent = "B";
+  updateSel();
+  const load = async (url, which) => {
+    const r = await fetch(url);
+    const arr = await r.arrayBuffer();
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    const buf = await ac.decodeAudioData(arr);
+    if (which === "A") { bufA = buf; durA = buf.duration; }
+    else { bufB = buf; durB = buf.duration; }
+  };
+  await load("/media/" + curPair.a, "A");
+  await load("/media/" + curPair.b, "B");
+  document.getElementById("clipId").value = curPair.clip + ":" + curPair.pair;
+  document.getElementById("pairInfo").textContent = curPair.a + " vs " + curPair.b;
+  document.getElementById("vote").style.display = "block";
+  applyLoudnessMatch();
+  draw();
+}
+let pairsList = [];
+window.addEventListener("load", async () => {
+  try {
+    const r = await fetch("/pairs");
+    pairsList = await r.json();
+    loadPairs();
+  } catch (e) {}
+});
+document.getElementById("loadPair").onclick = loadPairFiles;
+
+// --- voting ---
 document.getElementById("mosA").oninput = e => document.getElementById("mosAv").textContent = e.target.value;
 document.getElementById("mosB").oninput = e => document.getElementById("mosBv").textContent = e.target.value;
-
-let preferred = null;
-document.getElementById("voteA").onclick = () => { preferred = "A"; document.getElementById("status").textContent = "preferencia: A"; };
-document.getElementById("voteB").onclick = () => { preferred = "B"; document.getElementById("status").textContent = "preferencia: B"; };
-document.getElementById("voteTie").onclick = () => { preferred = "tie"; document.getElementById("status").textContent = "preferencia: empate"; };
-
+function markPref(p) {
+  preferred = p;
+  document.getElementById("voteA").style.outline = p === "A" ? "2px solid #7ab8ff" : "none";
+  document.getElementById("voteB").style.outline = p === "B" ? "2px solid #ffb35c" : "none";
+  document.getElementById("voteTie").style.outline = p === "tie" ? "2px solid #999" : "none";
+}
+document.getElementById("voteA").onclick = () => markPref("A");
+document.getElementById("voteB").onclick = () => markPref("B");
+document.getElementById("voteTie").onclick = () => markPref("tie");
 document.getElementById("submit").onclick = async function () {
   const body = {
     listener: document.getElementById("listener").value || "anon",
@@ -219,8 +283,12 @@ document.getElementById("submit").onclick = async function () {
     const r = await fetch("/vote", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const t = await r.text();
     document.getElementById("status").textContent = r.ok ? "voto guardado ✓ " + t : "error: " + t;
+    if (r.ok && curPair && pairsList.length) {
+      // advance to the next pair automatically
+      const sel = document.getElementById("pairs");
+      if (+sel.value < pairsList.length - 1) { sel.value = +sel.value + 1; loadPairFiles(); }
+    }
   } catch (e) {
-    // standalone mode: download the CSV row instead
     const row = [body.listener, body.clip_id, body.preferred, body.blind, body.mos_a, body.mos_b, body.comment].map(v => `"${String(v).replace(/"/g, '""')}"`).join(",");
     const a = document.createElement("a");
     a.href = "data:text/csv;charset=utf-8," + encodeURIComponent(row + "\n");

@@ -32,6 +32,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 UI_DIR = PROJECT_ROOT / "ui"
 HUMAN_DIR = PROJECT_ROOT / ".auto" / "human"
 MEDIA_DIR = PROJECT_ROOT / ".auto" / "human" / "media"
+CONDITIONS_DIR = HUMAN_DIR / "conditions"
+PAIRS_JSON = HUMAN_DIR / "pairs.json"
 VOTES_CSV = HUMAN_DIR / "votes.csv"
 CLI = [sys.executable, "-m", "voxera.cli"]
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8770
@@ -87,10 +89,18 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, f.read_bytes(), mimetypes.guess_type(str(f))[0] or "text/plain")
             return
         if path.startswith("/media/"):
-            f = MEDIA_DIR / Path(path).name
-            if f.is_file():
-                self._send(200, f.read_bytes(), "audio/wav")
+            name = Path(path).name
+            for base in (CONDITIONS_DIR, MEDIA_DIR):
+                f = base / name
+                if f.is_file():
+                    self._send(200, f.read_bytes(), "audio/wav")
+                    return
+        if path == "/pairs":
+            if PAIRS_JSON.is_file():
+                self._send(200, PAIRS_JSON.read_bytes())
                 return
+            self._send(200, b"[]")
+            return
         self._send(404, b"not found", "text/plain")
 
     def do_POST(self):

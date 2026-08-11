@@ -24,7 +24,9 @@ from voxera.errors import EnhancementError
 INTERNAL_SAMPLE_RATE = 48000
 SUPPORTED_SAMPLE_RATES = frozenset({16000, 22050, 44100, 48000})
 RATE_TOLERANCE_HZ = 1  # tolerate tiny header jitter, e.g. 44100.0 vs 44100.5
-SUPPORTED_EXTENSIONS = frozenset({".wav"})
+SUPPORTED_EXTENSIONS = frozenset({'.wav'})
+# Compressed audio is decoded by ffmpeg (Track 4 machinery) to 48k mono PCM.
+FFMPEG_AUDIO_EXTENSIONS = frozenset({'.mp3', '.m4a', '.flac', '.ogg', '.wma'})
 MAX_CHANNELS = 2
 
 OUTPUT_SUBTYPE = "PCM_24"
@@ -61,14 +63,14 @@ def format_label(subtype: str) -> str:
 
 
 def validate_input_path(path: str | Path) -> Path:
-    """Validate that ``path`` is a usable WAV input (Track 1A policy)."""
+    """Validate that ``path`` is a usable audio input (Track 1A policy + mp3 etc.)."""
     inp = Path(path)
     if not inp.exists():
         raise EnhancementError(f"no such file: {inp}")
     if inp.is_dir():
         raise EnhancementError(f"input is a directory: {inp}")
-    if inp.suffix.lower() not in SUPPORTED_EXTENSIONS:
-        supported = ", ".join(sorted(SUPPORTED_EXTENSIONS))
+    if inp.suffix.lower() not in SUPPORTED_EXTENSIONS | FFMPEG_AUDIO_EXTENSIONS:
+        supported = ", ".join(sorted(SUPPORTED_EXTENSIONS | FFMPEG_AUDIO_EXTENSIONS))
         raise EnhancementError(
             f"unsupported format: {inp.suffix} (supported: {supported})"
         )
@@ -78,10 +80,44 @@ def validate_input_path(path: str | Path) -> Path:
 def load_audio(path: str | Path) -> AudioData:
     """Load ``path`` under the frozen policy, returning 48 kHz mono float32.
 
-    Raises :class:`EnhancementError` for missing files, unsupported formats,
-    out-of-policy sample rates, channel counts or empty audio.
+    WAV inputs follow the Track 1A policy; compressed audio (.mp3/.m4a/…) is
+    decoded by ffmpeg to 48 kHz mono PCM first (Track 4 machinery).
     """
     inp = validate_input_path(path)
+    if inp.suffix.lower() not in SUPPORTED_EXTENSIONS:
+        return _load_ffmpeg_decoded(inp)
+    return _load_wav(inp)
+
+
+def _load_ffmpeg_decoded(inp: Path) -> AudioData:
+    """Decode a compressed audio file to a temp 48k mono wav, then load it."""
+    from voxera.video import extract_audio
+
+    TMP_DIR = Path(__file__).resolve().parent.parent.parent / "tmp"
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
+    import os
+    import tempfile
+
+    fd, tmp_name = tempfile.mkstemp(suffix=".wav", dir=str(TMP_DIR))
+    os.close(fd)
+    tmp = Path(tmp_name)
+    try:
+        extract_audio(inp, tmp)
+        data = _load_wav(tmp)
+        data = AudioData(
+            samples=data.samples,
+            source_sample_rate=48000,
+            source_channels=1,
+            source_bit_depth=24,
+            source_format="ffmpeg decoded",
+        )
+        return data
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _load_wav(inp: Path) -> AudioData:
+    """Load a WAV under the Track 1A policy (rates, channels, downmix, soxr)."""
     try:
         info = sf.info(str(inp))
     except Exception as exc:  # noqa: BLE001 - user-facing boundary
