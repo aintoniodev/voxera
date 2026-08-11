@@ -93,6 +93,10 @@ def winner_cond(row: dict) -> str:
 
 def main() -> int:
     sources = sorted(HUMAN.glob("votes.csv")) + sorted(HUMAN.glob("*_votes.csv")) + sorted(HUMAN.glob("voxer_*.csv"))
+    # standalone exports may live in media/ab_csv (e.g. votos_<name>.csv)
+    ab_dir = ROOT / "media" / "ab_csv"
+    if ab_dir.is_dir():
+        sources += sorted(ab_dir.glob("*.csv"))
     seen_paths = {p.name for p in sources}
     rows = []
     for path in sources:

@@ -1,8 +1,9 @@
 # Track 8 — Resultados evaluación humana (AB test)
 
-> Fecha: 2026-08-11 · Oyente: Antonio (1 de 5-10 objetivo) · 60 pares votados
-> (15 clips × 4 pares, todos cubiertos) · votos en `.auto/human/votes.csv`
-> (gitignored, local) · 1 voto duplicado descartado + 1 smoke de prueba.
+> Ronda 1: 2026-08-11, Antonio, 60 pares (15 clips × 4 pares).
+> Ronda 2 (decisión): 3 oyentes (Antonio, Matina, victoria) × 5 pares difíciles
+> (HTML autocontenido, orden y lados aleatorizados por oyente) → `media/ab_csv/`.
+> Votos servidor: `.auto/human/votes.csv` (local).
 
 ## Condiciones (todas normalizadas a -16 LUFS)
 
@@ -39,13 +40,27 @@
   sintético — y a que en el benchmark real degradó test_pc4_martina a casi
   silencio (TP -80 dB). Candidato a re-evaluar con más oyentes.
 
-## Decisión #12 — estado
+## Decisión #12 — RESUELTA ✅ (2026-08-11, ronda 2)
 
-- Umbral propuesto `DF2+master ≥ DF2 en ≥60% de escuchas`: **NO alcanzado con
-  1 oyente** (47%). Dirección correcta (47>27, MOS 3.07>2.87).
-- **Acción recomendada**: 2-4 oyentes más haciendo solo el par **B vs C** (15
-  clips, ~20 min) para cerrar la decisión con n≥45-75.
-- Alternativa: relajar el umbral a "C ≥ B incluyendo empates ≥ 60%" (74% ya).
+Test de 5 pares difíciles (susurros, grito, metro, agua, conversación baja) con
+**3 oyentes** (Antonio, Matina, victoria), orden y lados A/B aleatorizados:
+
+| Oyente | n | C (DF2+master) | B (DF2) | Empate | MOS C vs B |
+|---|---|---|---|---|---|
+| Antonio | 15 | 8 (53%) | 4 (27%) | 3 | 3.20 vs 3.00 |
+| Matina | 5 | 3 (60%) | 1 (20%) | 1 | 3.0 vs 3.0 |
+| victoria | 5 | 4 (80%) | 1 (20%) | 0 | 3.0 vs 3.0 |
+| **TOTAL** | **25** | **15 (60%)** | **6 (24%)** | **4 (16%)** | 3.12 vs 3.00 |
+
+- **Umbral `DF2+master ≥ DF2 en ≥60%`: ✅ CUMPLIDO (60% exacto, n=25)**.
+- Criterio alternativo (C ≥ B incl. empates): **76%**.
+- Por clip (los 5 difíciles): C gana en 4 de 5 (pc5 3/3, martina 2C+1tie,
+  chorros 2C+1tie, grito 2C+1B); **B gana 3/3 en `test_metros`** (ruido de
+  metro constante) — el punto débil del master: ruido estacionario ancho de
+  banda. Recomendación: para ese tipo de audio, DF2 solo o preset `bad-room`.
+
+**Conclusión**: el pipeline DF2+master queda **validado como diferencial de
+producto** (60% ≥ 60% + 80% vs original en ronda 1 + MOS superior).
 
 ## Cómo reproducir
 
