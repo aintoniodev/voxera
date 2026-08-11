@@ -36,3 +36,13 @@ voxera-desktop/src-tauri/target/
 # demo video (Remotion)
 voxera-demo/node_modules/
 voxera-demo/out/
+
+# secretos / credenciales (defensa en profundidad)
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+.netrc
+credentials.json

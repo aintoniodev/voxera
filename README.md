@@ -6,6 +6,25 @@ Brand: **aintonio.dev | Antonio Gómez** — an AI Engineer's 30-day content cha
 > Tagline: **"Sound like you, only better."** — phase 1 = denoiser; phase 2 = *"haz que mi voz
 > grabada suene como una voz profesional de vídeo"* (denoiser → analyzer + voice mastering).
 
+## Demo (40 s)
+
+<div align="center">
+  <video src="media/demo-video.mp4" controls poster="media/demo-poster.png" width="100%"></video>
+  <p><em>Si el vídeo no se reproduce aquí: <a href="media/demo-video.mp4">descargar demo.mp4</a> ·
+  fuente en <code>voxera-demo/</code> (Remotion, voz Piper ES, audio real antes/después)</em></p>
+</div>
+
+## Capturas
+
+<div align="center">
+  <img src="media/captura-app.png" alt="voxera app" width="320">
+  <img src="media/captura-5.png" alt="antes vs después" width="480">
+</div>
+<div align="center">
+  <img src="media/captura-susurro.png" alt="susurro antes/después" width="480">
+  <img src="media/captura-chorros.png" alt="chorros antes/después" width="480">
+</div>
+
 ## Quickstart
 
 ```bash
