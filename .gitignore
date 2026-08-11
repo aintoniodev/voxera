@@ -28,5 +28,7 @@ voxera-desktop/src-tauri/target/
 # benchmark v2 tooling (scripts SI, artefactos NO)
 .auto/
 !.auto/
+.auto/*
 !.auto/v2/
+.auto/v2/*
 !.auto/v2/*.py
