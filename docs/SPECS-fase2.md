@@ -301,7 +301,7 @@ Expected:
 
 **Criterios de aceptación:** exit 0; out WAV válido (48 kHz / 24-bit); `LUFS_out ∈ target ±1`; `true peak ≤ -1 dBTP`; duración conservada ±0.1 s; banda 100–300 Hz atenuada ≥2 dB en mud-heavy fixture; `|mean(samples)| < -60 dBFS` (DC); determinismo byte-equivalent en DSP; tests unitarios por etapa DSP (filtro, comp, límite, loudnorm, de-esser); JSON estable entre ejecuciones (excepto `processing_time_s`).
 **Libs:** `pedalboard` (EQ/comp/limiter), `pyloudnorm` (LUFS), `webrtcvad-wheels` (VAD). Instalar en `.venv-ims`.
-**Riesgos:** pedalboard en Windows 3.11 (wheels OK); no destruir la voz (compresión suave, EQ ≤±4 dB, de-esser max 6 dB); validación subjetiva con voz real del usuario (media/test1.wav).
+**Riesgos:** pedalboard en Windows 3.11 (wheels OK); no destruir la voz (compresión suave, EQ ≤±4 dB, de-esser max 6 dB); validación subjetiva con voz real del usuario (media/demo-chorros-antes.wav).
 
 ---
 

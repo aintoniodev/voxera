@@ -83,7 +83,7 @@
 - **Tauri shell**: instalar rustup + `cargo tauri init` reutilizando `ui/` (el CLI genera todo; Tauri solo envuelve).
 - **VoiceFixer/ClearerVoice**: candidatos ML de restoration para el benchmark (instalación pesada, diferida).
 - **GPU**: pasada de RTF en CUDA (hoy `--device auto` ya usa CUDA si está; falta medir).
-- **Re-evaluación con voz real**: `voxera analyze media/test1.wav` + `enhance --preset youtube` + `score --ref`.
+- **Re-evaluación con voz real**: `voxera analyze media/demo-chorros-antes.wav` + `enhance --preset youtube` + `score --ref`.
 - Limpieza: `tmp/dfbin_test` ya borrado del repo; `.auto/` y `models/` gitignored.
 - Ver vídeo fase 1: guion completado en la conversación (CTAs, tagline en cierre opcional).
 
@@ -93,10 +93,10 @@
 cd <proyecto>
 .venv-ims/Scripts/python.exe -m pytest tests/ -q          # 195 passed (~3 min)
 .venv-ims/Scripts/python.exe -m acceptance.pipeline features  # 6 features verdes (25 escenarios)
-.venv-ims/Scripts/voxera analyze media/test1.wav          # análisis TTY
-.venv-ims/Scripts/voxera enhance media/test1.wav -o out.wav --preset youtube  # NN + master
-.venv-ims/Scripts/voxera score out.wav --ref media/test1.wav  # CVS + voz preservada
-.venv-ims/Scripts/voxera silence media/test1.wav -o clean.wav --level medium
+.venv-ims/Scripts/voxera analyze media/demo-chorros-antes.wav          # análisis TTY
+.venv-ims/Scripts/voxera enhance media/demo-chorros-antes.wav -o out.wav --preset youtube  # NN + master
+.venv-ims/Scripts/voxera score out.wav --ref media/demo-chorros-antes.wav  # CVS + voz preservada
+.venv-ims/Scripts/voxera silence media/demo-chorros-antes.wav -o clean.wav --level medium
 .venv-ims/Scripts/python.exe ui/server.py 8770            # UI thin: 127.0.0.1:8770
 git status -s                                             # limpio
 ./launch-swarm.sh                                         # si hace falta el swarm
