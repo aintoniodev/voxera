@@ -77,6 +77,7 @@ curl -L --fail -o models/video/RealESRGAN_x4plus.pth https://github.com/xinntao/
 .venv-video/Scripts/voxera video zoom in.mp4 -o out.mp4 --anchor 0.5,0.33              # zoom Grow (ffmpeg, sin GPU)
 .venv-video/Scripts/voxera video teleport in.mp4 -o out.mp4 --time 36 --remove         # teletransportación: silueta blanca 2-2-2 + desaparición (cámara fija)
 .venv-video/Scripts/voxera video teleport in.mp4 -o out.mp4 --time 36                  # solo el parpadeo de silueta (transición entre tomas)
+.venv-video/Scripts/voxera video magnify in.mp4 -o out.mp4 --center 0.5,0.4           # lente Magnify (ffmpeg, sin GPU)
 .venv-ims/Scripts/voxera audio lowpass in.wav -o out.wav --start 4 --end 12           # efecto Pase Bajo (numpy/scipy)
 ```
 
@@ -127,6 +128,42 @@ canvas supersampled) — sin GPU, sin Premiere, sin keyframes a mano.
   (efecto Pase Bajo): `long1_growzoom_lowpass.mp4` (mismo video, audio
   procesado).
 
+### Lente "Magnify" (sin Premiere)
+
+Replicación del efecto "Magnify" de Adobe Premiere Pro 26.3 (tutorial de
+@billycreative_): una lente circular que amplía la zona que hay debajo,
+como una lupa al enseñar un paper. Medido en el propio tutorial (anillo
+circular detectado por Hough + continuidad de borde en 720x1280): radio
+~0.35 del ancho, borde nítido, mitad superior del frame. `voxera video
+magnify` es 100 % ffmpeg + dos PNG en gris (máscara con pluma y aro)
+generados con numpy — sin GPU, sin Premiere, sin keyframes.
+
+```bash
+.venv-video/Scripts/voxera video magnify in.mp4 -o out.mp4 \
+    --center 0.5,0.4 --size 0.35 --zoom 3
+```
+
+- **La lente se mueve por la escena** (default `--motion auto`): los
+  movimientos se disparan con los picos de energía de la voz (misma
+  envolvente RMS que `video zoom`) y, si no hay voz, barrido automático por
+  celdas con pausa en cada zona. `scan` = barrido puro; `voice` = solo con
+  voz (error si no detecta); `static` = lente quieta.
+- `--grid COLSxROWS` — celdas del barrido en orden de lectura (default
+  2x2, máx 6). `--hold` — pausa por celda en s (default 2.5).
+  `--move-dur` — transición entre celdas en s (default 1.2, curva S).
+  `--min-gap` — separación mínima entre momentos de voz (default 3).
+- **Calidad** (prioridad del usuario): el pipeline trabaja TODO en YUV sin
+  conversiones RGB — la máscara circular se aplica con `maskedmerge`
+  (blend lineal por luma) — y el upscale del patch es lanczos + unsharp
+  leve (`--sharpen`, default 0.5; 0 = sin). Fuera de la lente el frame
+  queda intacto (verificado: diff media 0.35-0.9 en vídeo real).
+- `--center X,Y` (solo static) · `--size` (default 0.35) · `--zoom`
+  (default 3) · `--feather` (default 0.05) · `--ring-width` (default
+  0.025) · `--start/--end` · `--dry-run`.
+- Ejemplos: `media/videos/magnified/paper_magnify_motion.mp4` (paper
+  sintético, barrido 2x2) y `tutorial_magnify_voice.mp4` (lente movida por
+  la voz sobre el propio tutorial, segmento 21-31 s).
+
 ### Efecto "Pase Bajo" de audio (sin Premiere)
 
 Replicación del efecto "Pase Bajo" del tutorial de @serri.mp4 (medido en el
@@ -166,6 +203,38 @@ audio del tutorial de zoom); verificado: bit-exacto fuera de la región,
   de las regiones y -26 dB en 3-9 kHz dentro (la frase 2 es "Otra de las
   cosas...", t=38.3-43.3 s).
 
+### Cortar silencios automáticamente (jump-cuts, sin Premiere)
+
+Edición automática estilo TikTok/CapCut "remove silence": detecta los
+silencios entre frases y los recorta del vídeo **y** del audio a la vez,
+generando jump-cuts con sync A/V exacto. Reutiliza el VAD de `voxera
+silence` (margen de respiración de 200 ms: las respiraciones nunca se
+cortan). 100 % ffmpeg — sin Premiere, sin edición manual.
+
+```bash
+.venv-video/Scripts/voxera video cutsilence in.mp4 -o out.mp4
+
+# ritmo más agresivo (TikTok) + padding mínimo
+.venv-video/Scripts/voxera video cutsilence in.mp4 -o out.mp4 \
+    --level aggressive --keep 0.1
+
+# plan sin escribir nada
+.venv-video/Scripts/voxera video cutsilence in.mp4 -o out.mp4 --dry-run
+```
+
+- `--level light|medium|aggressive` — cuándo un gap cuenta como silencio
+  (gaps > 1.5 s / 0.8 s / 0.4 s; default medium).
+- `--keep SEG` — silencio que queda en cada corte (default 0.15 s — evita
+  el sonido robótico del corte a cero; `--keep 0` = cortes a cero).
+- Cómo funciona: cortes cuantizados a la rejilla de frames del vídeo
+  (n/fps) y un solo paso de ffmpeg (`select`/`aselect` con la misma
+  expresión de rangos + `setpts`/`asetpts`) → **sync frame-accurate** sin
+  drift. El vídeo se re-encoda (libx264 CRF 18 + AAC 192k).
+- Verificado: duración de salida = suma de tramos conservados (±1 frame),
+  sync A/V < 20 ms, sin voz → error (exit 1), sin silencios → copia directa.
+- Demo real: `media/demo-video.mp4` (40.6 s de voz) → `--level medium`
+  elimina 8.15 s (5 cortes); verificado numéricamente (frames exactos).
+
 ### Skills del agente (conocimiento procedural)
 
 Cómo se midieron los efectos, criterios de auto-aplicación, trampas de
@@ -183,6 +252,7 @@ skills del agente).
 | `voxera analyze IN [--format tty\|json] [-o report.json]` | Análisis completo con confidence: LUFS-I/S/LRA/RMS/TP, VAD, SNR, bandas espectrales, hum 50/100/150, RT60, DC, plosives, breaths, mouth clicks, noise type. |
 | `voxera score IN [--ref ORIG]` | Voice Score CVS 0-100 (Noise/Clarity/Loudness/Room/Dynamics) + veredicto; `--ref` → Voice Preservation % (resemblyzer). |
 | `voxera silence IN -o OUT --level L [--breaths preserve\|attenuate\|remove] [--declick]` | Recorta silencios sin cortar respiraciones; reporta `original → cleaned`. |
+| `voxera video cutsilence IN -o OUT [--level L] [--keep S]` | Edición automática de vídeo: elimina silencios (jump-cuts estilo TikTok), audio y vídeo a la vez con sync frame-accurate. |
 | `voxera restore IN -o OUT [--declip] [--deplosive] [--dehum N] [--preset X]` | Restoration heurística: flat-tops, plosives, hum + master opcional. |
 | `voxera inspect IN` | `analyze` + recomendación (dehum/declick/restore/preset). |
 | `voxera enhance video.mp4 -o out.mp4 --preset X` | Vídeo directo: extrae audio → pipeline → mux (`-c:v copy` + AAC 192k, drift ≤10 ms). |
