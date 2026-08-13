@@ -155,6 +155,12 @@ audio del tutorial de zoom); verificado: bit-exacto fuera de la región,
 -27.8 dB en la banda 3-9 kHz dentro (teoría butter2@800), bajo preservado
 (-0.1 dB) y rampas S con correlación 0.999 (método ratio out/in).
 
+### Skills del agente (conocimiento procedural)
+
+Cómo se midieron los efectos, criterios de auto-aplicación, trampas de
+ffmpeg/TikTok y verificación numérica: `docs/skills/` (mirror en repo de los
+skills del agente).
+
 ## Comandos (Track 1, spec fase 2)
 
 | Comando | Qué hace |
