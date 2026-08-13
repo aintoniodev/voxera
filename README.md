@@ -75,6 +75,7 @@ curl -L --fail -o models/video/RealESRGAN_x4plus.pth https://github.com/xinntao/
 .venv-video/Scripts/voxera video enhance in.mp4 -o out.mp4 --dry-run        # plan, no escribe nada
 .venv-video/Scripts/voxera video compare a.mp4 b.mp4 -o ab.mp4 --source orig.mp4   # A/B 3 paneles
 .venv-video/Scripts/voxera video zoom in.mp4 -o out.mp4 --anchor 0.5,0.33              # zoom Grow (ffmpeg, sin GPU)
+.venv-ims/Scripts/voxera audio lowpass in.wav -o out.wav --start 4 --end 12           # efecto Pase Bajo (numpy/scipy)
 ```
 
 ### Zoom 
@@ -121,6 +122,38 @@ canvas supersampled) — sin GPU, sin Premiere, sin keyframes a mano.
   curva 62, pulse, auto-emphasis en t = 1.18/20.68/30.76/38.63 s sobre
   `long1_enhanced.mp4`); verificado por SSIM 0.997 contra el window teórico
   en los picos y 1.000 en las líneas base.
+
+### Efecto "Pase Bajo" de audio (sin Premiere)
+
+Replicación del efecto "Pase Bajo" del tutorial de @serri.mp4 (medido en el
+propio audio del tutorial, extraído vía CDP: cutoff 800 Hz declarado
+—"ajustaremos el valor a 800 hercios"—, transición predeterminada de
+Premiere (Constant Power, ~1 s) en los cortes, pendiente ~12 dB/oct):
+filtra las frecuencias agudas del clip con **rampas suaves** en los bordes
+para que el cambio no sea brusco. `voxera audio lowpass` es 100 %
+numpy/scipy — sin Premiere, sin keyframes a mano.
+
+```bash
+.venv-ims/Scripts/voxera audio lowpass in.wav -o out.wav \
+    --start 4 --end 12              # el caso del tutorial: rampa de entrada,
+                                    # mantener, rampa de salida ("blip")
+.venv-ims/Scripts/voxera audio lowpass in.wav -o out.wav   # todo el clip
+```
+
+- `--cutoff` — frecuencia de corte en Hz (default 800, la del tutorial).
+- `--start/--end` — región filtrada; con ambos = blip (el caso del tutorial:
+  el segmento entre los dos cortes); solo `--start` = el filtro entra y se
+  queda; solo `--end` = empieza filtrado y se suelta.
+- `--transition` — duración de la rampa en cada borde en s (default 1 — la
+  "transición predeterminada" de Premiere; 0 = cambio brusco).
+- `--curve` 0-100 — fuerza del easing (default 62 — el rango 60-65 del
+  creador, misma convención que `video zoom`; 0 = lineal).
+- `--order` 1|2|4 — orden del filtro (default 2, ~12 dB/oct medido; 1 = 6
+  dB/oct, 4 = 24 dB/oct). `--dry-run` — plan sin escribir.
+- Ejemplo real: `media/audio/lowpass/demo_blip.wav` (blip 4-12 s sobre el
+audio del tutorial de zoom); verificado: bit-exacto fuera de la región,
+-27.8 dB en la banda 3-9 kHz dentro (teoría butter2@800), bajo preservado
+(-0.1 dB) y rampas S con correlación 0.999 (método ratio out/in).
 
 ## Comandos (Track 1, spec fase 2)
 
