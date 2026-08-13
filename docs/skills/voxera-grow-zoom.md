@@ -1,7 +1,7 @@
 # Skill: voxera-grow-zoom
 
-> Mirror del skill del agente (canonical en
-> `~/.pi/agent/projects-memory/improve-my-sound/skills/voxera-grow-zoom/SKILL.md`).
+> Mirror del skill del agente (canonical en el skill store local de pi,
+> fuera del repo).
 
 ## When to Use
 Aplicar zooms programáticos a vídeos (voxera video zoom), editar src/voxera/video_zoom.py, diagnosticar renders de zoom que no animan, o replicar el efecto "Grow" del tutorial de @serri.mp4 (zoom con curva de easing + ancla, ampliar y reducir).

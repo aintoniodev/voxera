@@ -1,7 +1,7 @@
 # Skills del agente (mirror en repo)
 
 Estos archivos son copias versionadas de los skills procedimentales del
-agente (canonical en `~/.pi/agent/projects-memory/improve-my-sound/skills/`).
+agente (canonical en el skill store local de pi, fuera del repo).
 El agente lee su skill store propio; este directorio versiona el
 conocimiento en el repo para que viaje con el proyecto.
 

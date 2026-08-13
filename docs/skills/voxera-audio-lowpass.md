@@ -1,8 +1,8 @@
 # Skill: voxera-audio-lowpass
 
-> Mirror del skill del agente (canonical en
-> `~/.pi/agent/projects-memory/improve-my-sound/skills/voxera-audio-lowpass/SKILL.md`).
-> Los ficheros de `tmp/` mencionados son artefactos locales (gitignored).
+> Mirror del skill del agente (canonical en el skill store local de pi,
+> fuera del repo). Los ficheros de `tmp/` mencionados son artefactos
+> locales (gitignored).
 
 ## When to Use
 Aplicar el efecto "Pase Bajo" (low-pass) de audio estilo Premiere (voxera audio lowpass), editar src/voxera/audio_lowpass.py, diagnosticar renders donde el filtro no suena como el tutorial, o replicar el efecto del tutorial de @serri.mp4 (cutoff 800 Hz + transición suave en los cortes).
