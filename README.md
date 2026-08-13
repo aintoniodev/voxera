@@ -131,30 +131,36 @@ canvas supersampled) — sin GPU, sin Premiere, sin keyframes a mano.
 Replicación del efecto "Magnify" de Adobe Premiere Pro 26.3 (tutorial de
 @billycreative_): una lente circular que amplía la zona que hay debajo,
 como una lupa al enseñar un paper. Medido en el propio tutorial (anillo
-circular detectado por Hough + continuidad de borde en 720x1280): lente
-estática, radio ~0.35 del ancho, borde nítido, mitad superior del frame.
-`voxera video magnify` es 100 % ffmpeg + dos PNG (máscara con pluma y aro
-de borde) generados con numpy — sin GPU, sin Premiere, sin keyframes.
+circular detectado por Hough + continuidad de borde en 720x1280): radio
+~0.35 del ancho, borde nítido, mitad superior del frame. `voxera video
+magnify` es 100 % ffmpeg + dos PNG en gris (máscara con pluma y aro)
+generados con numpy — sin GPU, sin Premiere, sin keyframes.
 
 ```bash
 .venv-video/Scripts/voxera video magnify in.mp4 -o out.mp4 \
     --center 0.5,0.4 --size 0.35 --zoom 3
 ```
 
-- `--center X,Y` — centro de la lente normalizado (default 0.5,0.38 — mitad
-  superior, zona de contenido; en el tutorial ~0.36,0.29).
-- `--size` — radio como fracción de min(w,h) (default 0.35, el del tutorial).
-- `--zoom` — ampliación en veces (default 3; el "Magnify" de Premiere usa
-  %, 200 = 3x en esta convención). `--feather` — suavizado del borde como
-  fracción del radio (default 0.05; 0 = borde duro). `--ring-width` — grosor
-  del aro de borde (default 0.025; 0 = sin aro).
-- `--start/--end` — segmento. `--dry-run` — plan sin escribir.
-- Fuera de la lente el frame queda intacto (verificado numéricamente:
-  diff media < 1 sobre el vídeo real; dentro, la senoide de test cambia de
-  periodo 8px → 8·zoom px).
-- Ejemplos: `media/videos/magnified/paper_magnify.mp4` (paper sintético,
-  caso de uso "enseñar un paper") y `tutorial_magnify.mp4` (lente sobre el
-  segmento del propio tutorial).
+- **La lente se mueve por la escena** (default `--motion auto`): los
+  movimientos se disparan con los picos de energía de la voz (misma
+  envolvente RMS que `video zoom`) y, si no hay voz, barrido automático por
+  celdas con pausa en cada zona. `scan` = barrido puro; `voice` = solo con
+  voz (error si no detecta); `static` = lente quieta.
+- `--grid COLSxROWS` — celdas del barrido en orden de lectura (default
+  2x2, máx 6). `--hold` — pausa por celda en s (default 2.5).
+  `--move-dur` — transición entre celdas en s (default 1.2, curva S).
+  `--min-gap` — separación mínima entre momentos de voz (default 3).
+- **Calidad** (prioridad del usuario): el pipeline trabaja TODO en YUV sin
+  conversiones RGB — la máscara circular se aplica con `maskedmerge`
+  (blend lineal por luma) — y el upscale del patch es lanczos + unsharp
+  leve (`--sharpen`, default 0.5; 0 = sin). Fuera de la lente el frame
+  queda intacto (verificado: diff media 0.35-0.9 en vídeo real).
+- `--center X,Y` (solo static) · `--size` (default 0.35) · `--zoom`
+  (default 3) · `--feather` (default 0.05) · `--ring-width` (default
+  0.025) · `--start/--end` · `--dry-run`.
+- Ejemplos: `media/videos/magnified/paper_magnify_motion.mp4` (paper
+  sintético, barrido 2x2) y `tutorial_magnify_voice.mp4` (lente movida por
+  la voz sobre el propio tutorial, segmento 21-31 s).
 
 ### Efecto "Pase Bajo" de audio (sin Premiere)
 
