@@ -28,6 +28,7 @@ from voxera.score import score_file
 from voxera.silence import LEVELS, silence_file
 from voxera import video as video_mod
 from voxera import video_enhance
+from voxera import video_zoom
 
 PROG = "voxera"
 
@@ -369,6 +370,75 @@ def build_parser() -> argparse.ArgumentParser:
         help="segmento a comparar en segundos (se aplica a todos los inputs)",
     )
     vcmp.add_argument("--fps", type=int, default=30, help="fps de salida (default 30)")
+
+    vzoom = vsub.add_parser(
+        "zoom",
+        help="zoom 'Grow': push-in con curva de easing + punto de anclaje "
+        "(100%% ffmpeg, sin Premiere)",
+        description="Zoom no lineal como el del tutorial de @serri.mp4: en vez de "
+        "zoom lineal, una curva de easing anclada a un punto (p. ej. la cara). "
+        "Sin GPU: solo ffmpeg. Curva 60-65 = el rango del tutorial.",
+    )
+    vzoom.add_argument("input", help="vídeo de entrada")
+    vzoom.add_argument("-o", "--output", required=True, help="salida .mp4")
+    vzoom.add_argument(
+        "--pct", type=float, default=video_zoom.DEFAULT_PCT,
+        help=f"%% de zoom (default {video_zoom.DEFAULT_PCT:g} — la demo del tutorial es +40%% en 4s; 12%% en 55s es invisible)",
+    )
+    vzoom.add_argument(
+        "--dir", dest="direction", choices=video_zoom.ZOOM_DIRECTIONS,
+        default=video_zoom.DEFAULT_DIRECTION,
+        help="grow (ampliar, default) | shrink (reducir, ventana negra) | pulse (ampliar y reducir)",
+    )
+    vzoom.add_argument(
+        "--hold", type=float, default=video_zoom.DEFAULT_HOLD,
+        help="fracción de la duración en el pico, solo pulse (default 0)",
+    )
+    vzoom.add_argument(
+        "--auto-emphasis", action="store_true",
+        help="criterio automático: detecta los picos de energía de la voz y "
+        "aplica un pulso (ampliar y reducir) en cada momento (pulse_dur="
+        f"{video_zoom.ZoomOptions().pulse_dur:g}s, max {video_zoom.ZoomOptions().max_pulses})",
+    )
+    vzoom.add_argument(
+        "--pulse-dur", type=float, default=video_zoom.ZoomOptions().pulse_dur,
+        help="duración de cada pulso en segundos (default 3)",
+    )
+    vzoom.add_argument(
+        "--max-pulses", type=int, default=video_zoom.ZoomOptions().max_pulses,
+        help="máximo número de pulsos con --auto-emphasis (default 4)",
+    )
+    vzoom.add_argument(
+        "--anchor", default="0.5,0.5", metavar="X,Y",
+        help="punto de anclaje normalizado 0-1 (default 0.5,0.5; talking-head ~0.5,0.33)",
+    )
+    vzoom.add_argument(
+        "--curve", type=float, default=video_zoom.DEFAULT_CURVE,
+        help=f"curva de easing 0-100 (default {video_zoom.DEFAULT_CURVE:g} — el 60-65 del tutorial; 0 = lineal)",
+    )
+    vzoom.add_argument(
+        "--easing", choices=video_zoom.ZOOM_EASINGS, default="smooth",
+        help="smooth (default, S-curva) | out (arranca rápido) | in (acelera) | linear",
+    )
+    vzoom.add_argument(
+        "--start", type=float, default=None,
+        help="inicio del segmento en segundos (default: principio)",
+    )
+    vzoom.add_argument(
+        "--end", type=float, default=None,
+        help="fin del segmento en segundos (default: fin del vídeo)",
+    )
+    vzoom.add_argument(
+        "--crf", type=int, default=18,
+        help="x264 CRF (default 18; más alto = fichero más pequeño)",
+    )
+    vzoom.add_argument(
+        "--audio-bitrate", default="192k", help="AAC bitrate (default 192k)",
+    )
+    vzoom.add_argument(
+        "--dry-run", action="store_true",
+        help="imprimir el plan y salir sin escribir nada",
+    )
 
     return parser
 
@@ -813,6 +883,34 @@ def _cmd_video(args) -> int:
                 seg=tuple(args.seg) if args.seg else None,
                 fps=args.fps,
             )
+        except EnhancementError as exc:
+            print(f"{PROG}: error: {exc}", file=sys.stderr)
+            return 1
+        print(f"✓ {out}")
+        return 0
+
+    if args.video_command == "zoom":
+        ax, ay = (float(v) for v in args.anchor.split(","))
+        opts = video_zoom.ZoomOptions(
+            pct=args.pct,
+            anchor=(ax, ay),
+            curve=args.curve,
+            easing=args.easing,
+            direction=args.direction,
+            hold=args.hold,
+            auto_emphasis=args.auto_emphasis,
+            pulse_dur=args.pulse_dur,
+            max_pulses=args.max_pulses,
+            start=args.start,
+            end=args.end,
+            crf=args.crf,
+            audio_bitrate=args.audio_bitrate,
+        )
+        try:
+            if args.dry_run:
+                print(video_zoom.build_plan(args.input, opts))
+                return 0
+            out = video_zoom.zoom_video(args.input, args.output, opts)
         except EnhancementError as exc:
             print(f"{PROG}: error: {exc}", file=sys.stderr)
             return 1
