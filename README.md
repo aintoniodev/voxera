@@ -49,6 +49,43 @@ uv venv --python 3.11 .venv-ims && uv pip install -p .venv-ims -e .
 .venv-ims/Scripts/voxera enhance in.wav -o out.wav --backend dpdfnet --model dpdfnet2 --attn-limit-db 24
 ```
 
+## Vídeo (fase 3) — mejora de vídeo vertical 9:16
+
+Mejora vídeos verticales (TikTok/Reels/Shorts): limpia compresión, upscala a
+**1080×1920 @30 fps** y remuxea el audio. Requiere **GPU NVIDIA (CUDA)** — CPU
+medido a ~67× más lento que realtime, no soportado.
+
+```bash
+# env (Python 3.11, CUDA)
+uv venv --python 3.11 .venv-video
+uv pip install -p .venv-video torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+uv pip install -p .venv-video -e ".[video]"
+uv pip uninstall -p .venv-video webrtcvad   # paquete fuente roto en Windows; queda webrtcvad-wheels
+
+# pesos (models/ está en .gitignore; descarga manual una vez)
+mkdir -p models/video
+curl -L --fail -o models/video/realesr-animevideov3.pth https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-animevideov3.pth
+curl -L --fail -o models/video/RealESRGAN_x4plus.pth https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth
+
+# uso
+.venv-video/Scripts/voxera video info in.mp4                                # probe JSON
+.venv-video/Scripts/voxera video enhance in.mp4 -o out.mp4                  # default: animevideov3 → 1080x1920@30
+.venv-video/Scripts/voxera video enhance in.mp4 -o out.mp4 --master-audio   # + voz masterizada (creator)
+.venv-video/Scripts/voxera video enhance in.mp4 -o out.mp4 --model x4plus   # escape "natural" (~10x más lento)
+.venv-video/Scripts/voxera video enhance in.mp4 -o out.mp4 --dry-run        # plan, no escribe nada
+.venv-video/Scripts/voxera video compare a.mp4 b.mp4 -o ab.mp4 --source orig.mp4   # A/B 3 paneles
+```
+
+- **Modelo default: `animevideov3`** — decisión AB humana en vídeo (2026-08-12): gana en calidad
+  percibida en dos contenidos (talking-head y walking/animación) y es ~7-10× más rápido.
+  `--model x4plus` = más textura real, ~10× más lento.
+- **Tiempos medidos (RTX 2060 6 GB, tile=512, fp16):** animevideov3 0.85 fps @720p / 0.39 @1080p;
+  x4plus 0.12 / 0.04. ≈1 h de cómputo por minuto de vídeo (animevideov3, 30 fps). Throttling
+  térmico tras ~1 h continua (~-25%).
+- **Web UI:** `.venv-video/Scripts/python.exe ui/server.py` → http://127.0.0.1:8770/video.html
+  (upload → job asíncrono → progreso → descarga + still antes/después).
+- **Spec completa:** `docs/SPECS-fase3-video.md`.
+
 ## Comandos (Track 1, spec fase 2)
 
 | Comando | Qué hace |
@@ -93,11 +130,12 @@ assumed — see `.auto/` (autoresearch).
 
 ```
 src/voxera/   enhance() contract, backend registry, audioio (policy), dsp/ (pipeline+presets),
-              analyze.py, master.py, vad.py, device.py, determinism.py, CLI
+              analyze.py, master.py, vad.py, device.py, determinism.py, CLI,
+              video_enhance.py (fase 3: Real-ESRGAN CUDA)
 features/     Gherkin: enhance-cli (10 escenarios), master-cli (5), analyze-cli (3)
 acceptance/   APS Gherkin acceptance pipeline (parse→dry-check→generate→run)
-tests/        195 pytest unit tests (tracks 0-5 + fase 1)
-ui/           UI thin (index + A/B player + server.py: /enhance /score /vote)
+tests/        195+ pytest unit tests (tracks 0-5 + fase 1 + video_enhance)
+ui/           UI thin (index + A/B player + video.html + server.py: /enhance /score /vote /api/video)
 .auto/v2/     benchmark v2: synthetic + real separados (reports/*.md)
 swarmforge/   SwarmForge four-pack (specifier→coder→refactorer→architect)
 .auto/        autoresearch harness (gitignored): measure.py, candidate.json, log.jsonl
@@ -119,6 +157,9 @@ swarmforge/   SwarmForge four-pack (specifier→coder→refactorer→architect)
   suite real esperando clips de Antonio en `.auto/v2/real/`.
 - **Fase 2 — Tracks 8/7 (humano + UI)**: ✅ A/B player + votos CSV + protocolo; UI thin en `ui/`
   (servidor 127.0.0.1:8770). Tauri shell pendiente de toolchain Rust.
+- **Fase 3 — Vídeo (mejora vertical 9:16)**: ✅ `voxera video info/enhance/compare`, backend
+  Real-ESRGAN CUDA (default animevideov3, AB decidido), `--master-audio` (voz voxera + vídeo en
+  un comando), web UI con jobs asíncronos, tests 13/13, deliverables en `media/videos/enhanced/`.
 - **Pendiente humano**: clips reales (decisión #3) y escucha Track 8 (decisión #12).
   Detalle: `docs/ROADMAP-fase2.md`.
 
