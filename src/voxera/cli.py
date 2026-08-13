@@ -29,6 +29,7 @@ from voxera.silence import LEVELS, silence_file
 from voxera import video as video_mod
 from voxera import video_enhance
 from voxera import video_zoom
+from voxera import video_magnify
 from voxera import audio_lowpass
 
 PROG = "voxera"
@@ -437,6 +438,62 @@ def build_parser() -> argparse.ArgumentParser:
         "--audio-bitrate", default="192k", help="AAC bitrate (default 192k)",
     )
     vzoom.add_argument(
+        "--dry-run", action="store_true",
+        help="imprimir el plan y salir sin escribir nada",
+    )
+
+    vmag = vsub.add_parser(
+        "magnify",
+        help="lente de aumento circular: amplía la zona elegida (tutorial Premiere 26.3)",
+        description="Efecto 'Magnify' de Adobe Premiere Pro 26.3 (tutorial de "
+        "@billycreative_): una lente circular que amplía la zona que hay "
+        "debajo, como una lupa al enseñar un paper. Medido en el tutorial: "
+        "lente estática, radio ~0.35 del ancho, borde nítido. Sin GPU: "
+        "ffmpeg + dos PNG generados con numpy.",
+    )
+    vmag.add_argument("input", help="vídeo de entrada")
+    vmag.add_argument("-o", "--output", required=True, help="salida .mp4")
+    vmag.add_argument(
+        "--center", default="0.5,0.38", metavar="X,Y",
+        help="centro de la lente normalizado 0-1 (default 0.5,0.38 — mitad superior, "
+        "zona de contenido; en el tutorial ~0.36,0.29)",
+    )
+    vmag.add_argument(
+        "--size", type=float, default=video_magnify.DEFAULT_SIZE,
+        help=f"radio de la lente como fracción de min(w,h) (default "
+        f"{video_magnify.DEFAULT_SIZE:g} — medido en el tutorial: ~0.35 del ancho)",
+    )
+    vmag.add_argument(
+        "--zoom", type=float, default=video_magnify.DEFAULT_ZOOM,
+        help=f"ampliación de la lente en veces (default {video_magnify.DEFAULT_ZOOM:g}x; "
+        f"el 'Magnify' de Premiere usa %%, 200 = 3x en esta convención)",
+    )
+    vmag.add_argument(
+        "--feather", type=float, default=video_magnify.DEFAULT_FEATHER,
+        help=f"suavizado del borde como fracción del radio (default "
+        f"{video_magnify.DEFAULT_FEATHER:g}; 0 = borde duro)",
+    )
+    vmag.add_argument(
+        "--ring-width", type=float, default=video_magnify.DEFAULT_RING_WIDTH,
+        help=f"grosor del aro de borde como fracción del radio (default "
+        f"{video_magnify.DEFAULT_RING_WIDTH:g}; 0 = sin aro)",
+    )
+    vmag.add_argument(
+        "--start", type=float, default=None,
+        help="inicio del segmento en segundos (default: principio)",
+    )
+    vmag.add_argument(
+        "--end", type=float, default=None,
+        help="fin del segmento en segundos (default: fin del vídeo)",
+    )
+    vmag.add_argument(
+        "--crf", type=int, default=18,
+        help="x264 CRF (default 18; más alto = fichero más pequeño)",
+    )
+    vmag.add_argument(
+        "--audio-bitrate", default="192k", help="AAC bitrate (default 192k)",
+    )
+    vmag.add_argument(
         "--dry-run", action="store_true",
         help="imprimir el plan y salir sin escribir nada",
     )
@@ -971,6 +1028,30 @@ def _cmd_video(args) -> int:
                 print(video_zoom.build_plan(args.input, opts))
                 return 0
             out = video_zoom.zoom_video(args.input, args.output, opts)
+        except EnhancementError as exc:
+            print(f"{PROG}: error: {exc}", file=sys.stderr)
+            return 1
+        print(f"✓ {out}")
+        return 0
+
+    if args.video_command == "magnify":
+        cx_, cy_ = (float(v) for v in args.center.split(","))
+        opts = video_magnify.MagnifyOptions(
+            center=(cx_, cy_),
+            size=args.size,
+            zoom=args.zoom,
+            feather=args.feather,
+            ring_width=args.ring_width,
+            start=args.start,
+            end=args.end,
+            crf=args.crf,
+            audio_bitrate=args.audio_bitrate,
+        )
+        try:
+            if args.dry_run:
+                print(video_magnify.build_plan(args.input, opts))
+                return 0
+            out = video_magnify.magnify_video(args.input, args.output, opts)
         except EnhancementError as exc:
             print(f"{PROG}: error: {exc}", file=sys.stderr)
             return 1
