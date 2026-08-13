@@ -75,6 +75,7 @@ curl -L --fail -o models/video/RealESRGAN_x4plus.pth https://github.com/xinntao/
 .venv-video/Scripts/voxera video enhance in.mp4 -o out.mp4 --dry-run        # plan, no escribe nada
 .venv-video/Scripts/voxera video compare a.mp4 b.mp4 -o ab.mp4 --source orig.mp4   # A/B 3 paneles
 .venv-video/Scripts/voxera video zoom in.mp4 -o out.mp4 --anchor 0.5,0.33              # zoom Grow (ffmpeg, sin GPU)
+.venv-video/Scripts/voxera video magnify in.mp4 -o out.mp4 --center 0.5,0.4           # lente Magnify (ffmpeg, sin GPU)
 .venv-ims/Scripts/voxera audio lowpass in.wav -o out.wav --start 4 --end 12           # efecto Pase Bajo (numpy/scipy)
 ```
 
@@ -124,6 +125,36 @@ canvas supersampled) — sin GPU, sin Premiere, sin keyframes a mano.
   en los picos y 1.000 en las líneas base. Con la voz filtrada en dos frases
   (efecto Pase Bajo): `long1_growzoom_lowpass.mp4` (mismo video, audio
   procesado).
+
+### Lente "Magnify" (sin Premiere)
+
+Replicación del efecto "Magnify" de Adobe Premiere Pro 26.3 (tutorial de
+@billycreative_): una lente circular que amplía la zona que hay debajo,
+como una lupa al enseñar un paper. Medido en el propio tutorial (anillo
+circular detectado por Hough + continuidad de borde en 720x1280): lente
+estática, radio ~0.35 del ancho, borde nítido, mitad superior del frame.
+`voxera video magnify` es 100 % ffmpeg + dos PNG (máscara con pluma y aro
+de borde) generados con numpy — sin GPU, sin Premiere, sin keyframes.
+
+```bash
+.venv-video/Scripts/voxera video magnify in.mp4 -o out.mp4 \
+    --center 0.5,0.4 --size 0.35 --zoom 3
+```
+
+- `--center X,Y` — centro de la lente normalizado (default 0.5,0.38 — mitad
+  superior, zona de contenido; en el tutorial ~0.36,0.29).
+- `--size` — radio como fracción de min(w,h) (default 0.35, el del tutorial).
+- `--zoom` — ampliación en veces (default 3; el "Magnify" de Premiere usa
+  %, 200 = 3x en esta convención). `--feather` — suavizado del borde como
+  fracción del radio (default 0.05; 0 = borde duro). `--ring-width` — grosor
+  del aro de borde (default 0.025; 0 = sin aro).
+- `--start/--end` — segmento. `--dry-run` — plan sin escribir.
+- Fuera de la lente el frame queda intacto (verificado numéricamente:
+  diff media < 1 sobre el vídeo real; dentro, la senoide de test cambia de
+  periodo 8px → 8·zoom px).
+- Ejemplos: `media/videos/magnified/paper_magnify.mp4` (paper sintético,
+  caso de uso "enseñar un paper") y `tutorial_magnify.mp4` (lente sobre el
+  segmento del propio tutorial).
 
 ### Efecto "Pase Bajo" de audio (sin Premiere)
 
