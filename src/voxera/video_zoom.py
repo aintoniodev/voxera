@@ -186,16 +186,16 @@ def _multi_z_expr(moments: list[float], opts: ZoomOptions) -> str:
     return f"(1+{_fmt(opts.pct / 100)}*({_pulse_expr(opts, moments=moments)}))"
 
 
-def find_emphasis_moments(
-    input: str | Path, opts: ZoomOptions, min_gap: float = 6.0
+def detect_emphasis_moments(
+    input: str | Path, max_pulses: int, min_gap: float = 6.0
 ) -> list[float]:
     """Momentos de énfasis: picos de la envolvente RMS de la voz.
 
-    Criterio (elegido por el usuario, 2026-08-13): aplicar el zoom donde la
+    Criterio (elegido por el usuario, 2026-08-13): aplicar el efecto donde la
     voz enfatiza. Envolvente RMS 50ms/25ms suavizada (~150ms), picos locales
     > 1.2x la media, selección voraz con separación mínima, top max_pulses.
+    Sin dependencia de opciones de zoom (compartido con video magnify).
     """
-    opts.validate()
     tmp = video_mod.temp_wav()
     try:
         video_mod.extract_audio(input, tmp)
@@ -233,7 +233,7 @@ def find_emphasis_moments(
     for _, t in cands:
         if all(abs(t - c) >= min_gap for c in chosen):
             chosen.append(t)
-        if len(chosen) >= opts.max_pulses:
+        if len(chosen) >= max_pulses:
             break
     chosen.sort()
     if not chosen:
@@ -242,6 +242,14 @@ def find_emphasis_moments(
             "(¿el audio tiene voz? pruebe sin --auto-emphasis)"
         )
     return chosen
+
+
+def find_emphasis_moments(
+    input: str | Path, opts: ZoomOptions, min_gap: float = 6.0
+) -> list[float]:
+    """Momentos de énfasis para zoom (envoltura de detect_emphasis_moments)."""
+    opts.validate()
+    return detect_emphasis_moments(input, opts.max_pulses, min_gap)
 
 
 def ease(p: float, curve: float = DEFAULT_CURVE, easing: str = "smooth") -> float:

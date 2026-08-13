@@ -480,6 +480,37 @@ def build_parser() -> argparse.ArgumentParser:
         f"{video_magnify.DEFAULT_RING_WIDTH:g}; 0 = sin aro)",
     )
     vmag.add_argument(
+        "--motion", choices=video_magnify.MOTIONS,
+        default=video_magnify.DEFAULT_MOTION,
+        help="auto (default): los movimientos se disparan con los picos de voz, "
+        "barrido automático si no hay voz | scan: barrido en celdas | "
+        "voice: solo con voz | static: lente quieta",
+    )
+    vmag.add_argument(
+        "--grid", default="2x2", metavar="COLSxROWS",
+        help="celdas del barrido en orden de lectura (default 2x2; máx 6 celdas)",
+    )
+    vmag.add_argument(
+        "--hold", type=float, default=video_magnify.DEFAULT_HOLD,
+        help=f"pausa en cada celda del barrido en s (default "
+        f"{video_magnify.DEFAULT_HOLD:g})",
+    )
+    vmag.add_argument(
+        "--move-dur", type=float, default=video_magnify.DEFAULT_MOVE_DUR,
+        help=f"duración de cada transición entre celdas en s (default "
+        f"{video_magnify.DEFAULT_MOVE_DUR:g}, curva S)",
+    )
+    vmag.add_argument(
+        "--min-gap", type=float, default=video_magnify.DEFAULT_MIN_GAP,
+        help=f"separación mínima entre momentos de voz en s (default "
+        f"{video_magnify.DEFAULT_MIN_GAP:g})",
+    )
+    vmag.add_argument(
+        "--sharpen", type=float, default=video_magnify.DEFAULT_SHARPEN,
+        help=f"unsharp leve tras el upscale (default "
+        f"{video_magnify.DEFAULT_SHARPEN:g}; 0 = sin — la lente queda más suave)",
+    )
+    vmag.add_argument(
         "--start", type=float, default=None,
         help="inicio del segmento en segundos (default: principio)",
     )
@@ -1071,12 +1102,19 @@ def _cmd_video(args) -> int:
 
     if args.video_command == "magnify":
         cx_, cy_ = (float(v) for v in args.center.split(","))
+        cols, rows = (int(v) for v in args.grid.lower().split("x"))
         opts = video_magnify.MagnifyOptions(
             center=(cx_, cy_),
             size=args.size,
             zoom=args.zoom,
             feather=args.feather,
             ring_width=args.ring_width,
+            motion=args.motion,
+            grid=(cols, rows),
+            hold=args.hold,
+            move_dur=args.move_dur,
+            min_gap=args.min_gap,
+            sharpen=args.sharpen,
             start=args.start,
             end=args.end,
             crf=args.crf,
