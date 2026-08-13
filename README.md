@@ -195,6 +195,38 @@ audio del tutorial de zoom); verificado: bit-exacto fuera de la región,
   de las regiones y -26 dB en 3-9 kHz dentro (la frase 2 es "Otra de las
   cosas...", t=38.3-43.3 s).
 
+### Cortar silencios automáticamente (jump-cuts, sin Premiere)
+
+Edición automática estilo TikTok/CapCut "remove silence": detecta los
+silencios entre frases y los recorta del vídeo **y** del audio a la vez,
+generando jump-cuts con sync A/V exacto. Reutiliza el VAD de `voxera
+silence` (margen de respiración de 200 ms: las respiraciones nunca se
+cortan). 100 % ffmpeg — sin Premiere, sin edición manual.
+
+```bash
+.venv-video/Scripts/voxera video cutsilence in.mp4 -o out.mp4
+
+# ritmo más agresivo (TikTok) + padding mínimo
+.venv-video/Scripts/voxera video cutsilence in.mp4 -o out.mp4 \
+    --level aggressive --keep 0.1
+
+# plan sin escribir nada
+.venv-video/Scripts/voxera video cutsilence in.mp4 -o out.mp4 --dry-run
+```
+
+- `--level light|medium|aggressive` — cuándo un gap cuenta como silencio
+  (gaps > 1.5 s / 0.8 s / 0.4 s; default medium).
+- `--keep SEG` — silencio que queda en cada corte (default 0.15 s — evita
+  el sonido robótico del corte a cero; `--keep 0` = cortes a cero).
+- Cómo funciona: cortes cuantizados a la rejilla de frames del vídeo
+  (n/fps) y un solo paso de ffmpeg (`select`/`aselect` con la misma
+  expresión de rangos + `setpts`/`asetpts`) → **sync frame-accurate** sin
+  drift. El vídeo se re-encoda (libx264 CRF 18 + AAC 192k).
+- Verificado: duración de salida = suma de tramos conservados (±1 frame),
+  sync A/V < 20 ms, sin voz → error (exit 1), sin silencios → copia directa.
+- Demo real: `media/demo-video.mp4` (40.6 s de voz) → `--level medium`
+  elimina 8.15 s (5 cortes); verificado numéricamente (frames exactos).
+
 ### Skills del agente (conocimiento procedural)
 
 Cómo se midieron los efectos, criterios de auto-aplicación, trampas de
@@ -212,6 +244,7 @@ skills del agente).
 | `voxera analyze IN [--format tty\|json] [-o report.json]` | Análisis completo con confidence: LUFS-I/S/LRA/RMS/TP, VAD, SNR, bandas espectrales, hum 50/100/150, RT60, DC, plosives, breaths, mouth clicks, noise type. |
 | `voxera score IN [--ref ORIG]` | Voice Score CVS 0-100 (Noise/Clarity/Loudness/Room/Dynamics) + veredicto; `--ref` → Voice Preservation % (resemblyzer). |
 | `voxera silence IN -o OUT --level L [--breaths preserve\|attenuate\|remove] [--declick]` | Recorta silencios sin cortar respiraciones; reporta `original → cleaned`. |
+| `voxera video cutsilence IN -o OUT [--level L] [--keep S]` | Edición automática de vídeo: elimina silencios (jump-cuts estilo TikTok), audio y vídeo a la vez con sync frame-accurate. |
 | `voxera restore IN -o OUT [--declip] [--deplosive] [--dehum N] [--preset X]` | Restoration heurística: flat-tops, plosives, hum + master opcional. |
 | `voxera inspect IN` | `analyze` + recomendación (dehum/declick/restore/preset). |
 | `voxera enhance video.mp4 -o out.mp4 --preset X` | Vídeo directo: extrae audio → pipeline → mux (`-c:v copy` + AAC 192k, drift ≤10 ms). |
