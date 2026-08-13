@@ -30,6 +30,7 @@ from voxera import video as video_mod
 from voxera import video_enhance
 from voxera import video_zoom
 from voxera import video_magnify
+from voxera import video_silence
 from voxera import audio_lowpass
 
 PROG = "voxera"
@@ -494,6 +495,40 @@ def build_parser() -> argparse.ArgumentParser:
         "--audio-bitrate", default="192k", help="AAC bitrate (default 192k)",
     )
     vmag.add_argument(
+        "--dry-run", action="store_true",
+        help="imprimir el plan y salir sin escribir nada",
+    )
+
+    vcuts = vsub.add_parser(
+        "cutsilence",
+        help="edición automática: elimina los silencios del vídeo (jump-cuts "
+        "estilo TikTok), audio y vídeo a la vez con sync exacto",
+        description="Detecta los silencios entre frases con el mismo VAD de "
+        "'voxera silence' y los recorta del vídeo Y del audio en un solo paso "
+        "de ffmpeg (select/aselect + setpts, cortes cuantizados a la rejilla "
+        "de frames -> sync A/V frame-accurate). 100%% ffmpeg — sin Premiere, "
+        "sin edición manual.",
+    )
+    vcuts.add_argument("input", help="vídeo de entrada")
+    vcuts.add_argument("-o", "--output", required=True, help="salida .mp4")
+    vcuts.add_argument(
+        "--level", choices=tuple(video_silence.TRIGGERS), default="medium",
+        help="agresividad: gaps > light 1.5s | medium 0.8s | aggressive 0.4s "
+        "(default medium)",
+    )
+    vcuts.add_argument(
+        "--keep", type=float, default=video_silence.DEFAULT_KEEP,
+        help=f"segundos de silencio conservados en cada corte (default "
+        f"{video_silence.DEFAULT_KEEP:g}; 0 = cortes a cero, sonido encadenado)",
+    )
+    vcuts.add_argument(
+        "--crf", type=int, default=18,
+        help="x264 CRF (default 18; más alto = fichero más pequeño)",
+    )
+    vcuts.add_argument(
+        "--audio-bitrate", default="192k", help="AAC bitrate (default 192k)",
+    )
+    vcuts.add_argument(
         "--dry-run", action="store_true",
         help="imprimir el plan y salir sin escribir nada",
     )
@@ -1052,6 +1087,24 @@ def _cmd_video(args) -> int:
                 print(video_magnify.build_plan(args.input, opts))
                 return 0
             out = video_magnify.magnify_video(args.input, args.output, opts)
+        except EnhancementError as exc:
+            print(f"{PROG}: error: {exc}", file=sys.stderr)
+            return 1
+        print(f"✓ {out}")
+        return 0
+
+    if args.video_command == "cutsilence":
+        opts = video_silence.CutSilenceOptions(
+            level=args.level,
+            keep=args.keep,
+            crf=args.crf,
+            audio_bitrate=args.audio_bitrate,
+        )
+        try:
+            if args.dry_run:
+                print(video_silence.build_plan(args.input, opts))
+                return 0
+            out = video_silence.cutsilence_video(args.input, args.output, opts)
         except EnhancementError as exc:
             print(f"{PROG}: error: {exc}", file=sys.stderr)
             return 1
