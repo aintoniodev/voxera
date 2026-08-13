@@ -29,6 +29,7 @@ from voxera.silence import LEVELS, silence_file
 from voxera import video as video_mod
 from voxera import video_enhance
 from voxera import video_zoom
+from voxera import video_teleport
 from voxera import video_magnify
 from voxera import video_silence
 from voxera import audio_lowpass
@@ -442,6 +443,61 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run", action="store_true",
         help="imprimir el plan y salir sin escribir nada",
     )
+
+    vtel = vsub.add_parser(
+        "teleport",
+        help="teletransportación: parpadeo de silueta blanca (tutorial @serri.mp4, sin Premiere)",
+        description="Replicación del efecto 'teletransportación' de @serri.mp4: la persona "
+        "parpadea en silueta blanca opaca (2 frames blanco, hueco, 2 frames blanco) "
+        "y, con --remove, desaparece por completo (inpaint con el fondo mediano). "
+        "Requiere cámara fija (trípode). 100%% numpy/scipy, sin GPU.",
+    )
+    vtel.add_argument("input", help="vídeo de entrada (cámara fija)")
+    vtel.add_argument("-o", "--output", required=True, help="salida .mp4")
+    vtel.add_argument(
+        "--time", type=float, required=True,
+        help="instante del parpadeo en segundos (primer frame blanco)",
+    )
+    vtel.add_argument(
+        "--pattern", default=video_teleport.DEFAULT_PATTERN,
+        help=f"patrón de parpadeo 'W-G-W' en frames (default {video_teleport.DEFAULT_PATTERN} "
+        f"— los 2-2-2 del tutorial: 2 blanco, hueco, 2 blanco)",
+    )
+    vtel.add_argument(
+        "--remove", action="store_true",
+        help="teletransportación completa: tras el parpadeo el sujeto desaparece "
+        "(inpaint con el fondo mediano) y la silueta queda congelada --hold segundos",
+    )
+    vtel.add_argument(
+        "--hold", type=float, default=video_teleport.DEFAULT_HOLD,
+        help=f"segundos de silueta congelada tras el parpadeo, solo con --remove "
+        f"(default {video_teleport.DEFAULT_HOLD:g})",
+    )
+    vtel.add_argument(
+        "--dilate", type=int, default=video_teleport.DEFAULT_DILATE,
+        help=f"px de dilatación de la silueta (default {video_teleport.DEFAULT_DILATE}; "
+        "más = cubre mejor al sujeto, menos = silueta más fiel)",
+    )
+    vtel.add_argument(
+        "--threshold", type=int, default=video_teleport.DEFAULT_THRESHOLD,
+        help=f"umbral de diff por canal RGB para la máscara (default {video_teleport.DEFAULT_THRESHOLD})",
+    )
+    vtel.add_argument(
+        "--bg-frames", type=int, default=video_teleport.DEFAULT_BG_FRAMES,
+        help=f"fotogramas muestreados para el fondo mediano (default {video_teleport.DEFAULT_BG_FRAMES})",
+    )
+    vtel.add_argument(
+        "--crf", type=int, default=18,
+        help="x264 CRF (default 18; más alto = fichero más pequeño)",
+    )
+    vtel.add_argument(
+        "--audio-bitrate", default="192k", help="AAC bitrate (default 192k)",
+    )
+    vtel.add_argument(
+        "--dry-run", action="store_true",
+        help="imprimir el plan y salir sin escribir nada",
+    )
+
 
     vmag = vsub.add_parser(
         "magnify",
@@ -1058,7 +1114,28 @@ def _cmd_video(args) -> int:
         print(f"✓ {out}")
         return 0
 
-    if args.video_command == "compare":
+    if args.video_command == "teleport":
+        opts = video_teleport.TeleportOptions(
+            time=args.time,
+            pattern=args.pattern,
+            remove=args.remove,
+            hold=args.hold,
+            dilate=args.dilate,
+            threshold=args.threshold,
+            bg_frames=args.bg_frames,
+            crf=args.crf,
+            audio_bitrate=args.audio_bitrate,
+        )
+        try:
+            if args.dry_run:
+                print(video_teleport.build_plan(args.input, opts))
+                return 0
+            out = video_teleport.teleport_video(args.input, args.output, opts)
+        except EnhancementError as exc:
+            print(f"{PROG}: error: {exc}", file=sys.stderr)
+            return 1
+        print(f"✓ {out}")
+        return 0
         try:
             out = video_enhance.compare_videos(
                 args.a, args.b, args.output,
