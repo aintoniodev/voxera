@@ -121,7 +121,9 @@ canvas supersampled) — sin GPU, sin Premiere, sin keyframes a mano.
 - Ejemplo real: `media/videos/zoomed/long1_growzoom.mp4` (+30 %, ancla cara,
   curva 62, pulse, auto-emphasis en t = 1.18/20.68/30.76/38.63 s sobre
   `long1_enhanced.mp4`); verificado por SSIM 0.997 contra el window teórico
-  en los picos y 1.000 en las líneas base.
+  en los picos y 1.000 en las líneas base. Con la voz filtrada en dos frases
+  (efecto Pase Bajo): `long1_growzoom_lowpass.mp4` (mismo video, audio
+  procesado).
 
 ### Efecto "Pase Bajo" de audio (sin Premiere)
 
@@ -154,6 +156,13 @@ numpy/scipy — sin Premiere, sin keyframes a mano.
 audio del tutorial de zoom); verificado: bit-exacto fuera de la región,
 -27.8 dB en la banda 3-9 kHz dentro (teoría butter2@800), bajo preservado
 (-0.1 dB) y rampas S con correlación 0.999 (método ratio out/in).
+- Ejemplo combinado zoom + voz lowpass:
+  `media/videos/zoomed/long1_growzoom_lowpass.mp4` — el growzoom de long1 con
+  dos frases de la voz filtradas a 800 Hz (30.1-35.6 s y 38.2-43.4 s,
+  transición 0.5 s), coincidiendo con los pulsos de zoom en t=30.76 y
+  38.63 s para ver/oir los dos efectos a la vez; verificado bit-exacto fuera
+  de las regiones y -26 dB en 3-9 kHz dentro (la frase 2 es "Otra de las
+  cosas...", t=38.3-43.3 s).
 
 ### Skills del agente (conocimiento procedural)
 
