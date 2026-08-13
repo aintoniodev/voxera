@@ -74,7 +74,10 @@ curl -L --fail -o models/video/RealESRGAN_x4plus.pth https://github.com/xinntao/
 .venv-video/Scripts/voxera video enhance in.mp4 -o out.mp4 --model x4plus   # escape "natural" (~10x más lento)
 .venv-video/Scripts/voxera video enhance in.mp4 -o out.mp4 --dry-run        # plan, no escribe nada
 .venv-video/Scripts/voxera video compare a.mp4 b.mp4 -o ab.mp4 --source orig.mp4   # A/B 3 paneles
+.venv-video/Scripts/voxera video zoom in.mp4 -o out.mp4 --anchor 0.5,0.33              # zoom Grow (ffmpeg, sin GPU)
 ```
+
+### Zoom 
 
 - **Modelo default: `animevideov3`** — decisión AB humana en vídeo (2026-08-12): gana en calidad
   percibida en dos contenidos (talking-head y walking/animación) y es ~7-10× más rápido.
@@ -85,6 +88,39 @@ curl -L --fail -o models/video/RealESRGAN_x4plus.pth https://github.com/xinntao/
 - **Web UI:** `.venv-video/Scripts/python.exe ui/server.py` → http://127.0.0.1:8770/video.html
   (upload → job asíncrono → progreso → descarga + still antes/después).
 - **Spec completa:** `docs/SPECS-fase3-video.md`.
+
+### Zoom "Grow" (sin Premiere)
+
+Replicación del truco del tutorial de @serri.mp4 (medido frame a frame en el
+propio vídeo: zoom 1.0 → 1.40 en ~4 s con curva S, ancla en el sujeto, y
+shrink 1.0 → 0.77): zoom con **curva de easing** + **punto de anclaje**,
+ampliar y/o reducir. `voxera video zoom` es 100 % ffmpeg (motor zoompan,
+canvas supersampled) — sin GPU, sin Premiere, sin keyframes a mano.
+
+```bash
+.venv-video/Scripts/voxera video zoom in.mp4 -o out.mp4 \
+    --pct 30 --anchor 0.5,0.33 --curve 62 --dir pulse
+
+# criterio automático: picos de energía de la voz (recomendado)
+.venv-video/Scripts/voxera video zoom in.mp4 -o out.mp4 \
+    --pct 30 --anchor 0.5,0.33 --dir pulse --auto-emphasis \
+    --pulse-dur 3 --max-pulses 4
+```
+
+- `--dir grow|shrink|pulse` — ampliar, reducir (ventana negra), o ampliar y
+  reducir (default grow). `--pct` — % de zoom (default 40, como la demo del
+  tutorial; 12 % en 55 s es invisible). `--hold` — fracción en el pico.
+- `--anchor X,Y` — punto que queda **fijo en pantalla** mientras la imagen
+  crece/encoge alrededor (semántica Premiere; talking-head ≈ `0.5,0.33`).
+- `--curve` 0-100 — fuerza del easing (default 62 — el rango 60-65 del
+  tutorial; 0 = lineal). `--easing smooth|out|in|linear`.
+- `--auto-emphasis` — detecta picos de energía de la voz (envolvente RMS,
+  centroide de regiones) y aplica un pulso en cada momento.
+- `--start/--end` — segmento. `--dry-run` — plan sin escribir.
+- Ejemplo real: `media/videos/zoomed/long1_growzoom.mp4` (+30 %, ancla cara,
+  curva 62, pulse, auto-emphasis en t = 1.18/20.68/30.76/38.63 s sobre
+  `long1_enhanced.mp4`); verificado por SSIM 0.997 contra el window teórico
+  en los picos y 1.000 en las líneas base.
 
 ## Comandos (Track 1, spec fase 2)
 
