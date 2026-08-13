@@ -29,6 +29,7 @@ from voxera.silence import LEVELS, silence_file
 from voxera import video as video_mod
 from voxera import video_enhance
 from voxera import video_zoom
+from voxera import audio_lowpass
 
 PROG = "voxera"
 
@@ -436,6 +437,65 @@ def build_parser() -> argparse.ArgumentParser:
         "--audio-bitrate", default="192k", help="AAC bitrate (default 192k)",
     )
     vzoom.add_argument(
+        "--dry-run", action="store_true",
+        help="imprimir el plan y salir sin escribir nada",
+    )
+
+    # --- audio --------------------------------------------------------------
+    audio_parser = subparsers.add_parser(
+        "audio",
+        help="efectos de audio (100%% numpy/scipy, sin Premiere)",
+        description="Efectos de audio replicados de tutoriales: el 'Pase Bajo' "
+        "de @serri.mp4 (low-pass 800 Hz con transición suave en los cortes).",
+    )
+    asub = audio_parser.add_subparsers(dest="audio_command", required=True, metavar="COMMAND")
+
+    alow = asub.add_parser(
+        "lowpass",
+        help="efecto 'Pase Bajo': low-pass con transición suave (tutorial @serri.mp4)",
+        description="Replicación del efecto 'Pase Bajo' de Adobe Premiere (tutorial "
+        "de @serri.mp4): filtra las frecuencias agudas (cutoff 800 Hz por defecto) "
+        "con una rampa suave en los cortes para que el cambio no sea brusco. "
+        "Sin Premiere: numpy/scipy.",
+    )
+    alow.add_argument("input", help="audio de entrada (.wav, .mp3, .m4a, .flac…)")
+    alow.add_argument("-o", "--output", required=True, help="salida .wav (48 kHz 24-bit)")
+    alow.add_argument(
+        "--cutoff", type=float, default=audio_lowpass.DEFAULT_CUTOFF,
+        help=f"frecuencia de corte Hz (default {audio_lowpass.DEFAULT_CUTOFF:g} — "
+        f"'ajustaremos el valor a 800 hercios' del tutorial)",
+    )
+    alow.add_argument(
+        "--transition", type=float, default=audio_lowpass.DEFAULT_TRANSITION,
+        help=f"duración de la rampa en cada borde en s (default "
+        f"{audio_lowpass.DEFAULT_TRANSITION:g} — la 'transición predeterminada' "
+        f"de Premiere; 0 = cambio brusco)",
+    )
+    alow.add_argument(
+        "--curve", type=float, default=audio_lowpass.DEFAULT_CURVE,
+        help=f"curva de easing 0-100 (default {audio_lowpass.DEFAULT_CURVE:g} — "
+        f"el 60-65 del creador; 0 = lineal)",
+    )
+    alow.add_argument(
+        "--easing", choices=audio_lowpass.LP_EASINGS, default="smooth",
+        help="smooth (default, S-curva) | out (arranca rápido) | in (acelera) | linear",
+    )
+    alow.add_argument(
+        "--order", type=int, choices=audio_lowpass.LP_ORDERS,
+        default=audio_lowpass.DEFAULT_ORDER,
+        help=f"orden del filtro (default {audio_lowpass.DEFAULT_ORDER} — ~12 dB/oct "
+        f"medido en el tutorial): 1 = 6 dB/oct, 2 = 12 dB/oct, 4 = 24 dB/oct",
+    )
+    alow.add_argument(
+        "--start", type=float, default=None,
+        help="inicio de la región filtrada en s (default: principio del clip)",
+    )
+    alow.add_argument(
+        "--end", type=float, default=None,
+        help="fin de la región filtrada en s (default: fin del clip); con --start "
+        "y --end = el caso del tutorial: rampa de entrada, mantener, rampa de salida",
+    )
+    alow.add_argument(
         "--dry-run", action="store_true",
         help="imprimir el plan y salir sin escribir nada",
     )
@@ -920,6 +980,31 @@ def _cmd_video(args) -> int:
     return 2
 
 
+def _cmd_audio(args) -> int:
+    if args.audio_command == "lowpass":
+        opts = audio_lowpass.LowPassOptions(
+            cutoff=args.cutoff,
+            transition=args.transition,
+            curve=args.curve,
+            easing=args.easing,
+            order=args.order,
+            start=args.start,
+            end=args.end,
+        )
+        try:
+            if args.dry_run:
+                print(audio_lowpass.build_plan(args.input, opts))
+                return 0
+            out = audio_lowpass.lowpass_file(args.input, args.output, opts)
+        except EnhancementError as exc:
+            print(f"{PROG}: error: {exc}", file=sys.stderr)
+            return 1
+        print(f"✓ {out}")
+        return 0
+
+    return 2
+
+
 def main(argv: list[str] | None = None) -> int:
     # Windows console/pipes default to cp1252 and crash on '✓' etc.
     for stream in (sys.stdout, sys.stderr):
@@ -946,6 +1031,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_inspect(args)
     if args.command == "video":
         return _cmd_video(args)
+    if args.command == "audio":
+        return _cmd_audio(args)
 
     parser.error(f"unknown command: {args.command}")
     return 2
