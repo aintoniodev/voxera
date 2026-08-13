@@ -18,12 +18,13 @@ Implementación: 100 % numpy/scipy (sin Premiere, sin keyframes a mano).
   wet = butter(order, cutoff) aplicado con sosfilt a todo el clip
   out = dry + (wet - dry) * env   (crossfade seco/húmedo)
 
-env es la envolvente 0..1 de la región con rampas S en los bordes:
+env es la envolvente 0..1 de la región con rampas S SOLO en los bordes de
+región explícitos (los cortes del tutorial):
   - sin --start/--end : todo el clip filtrado, rampa en ambos bordes
     (la "transición predeterminada" del tutorial, aplicada a los cortes)
   - --start y --end   : "blip" — rampa de entrada, mantener, rampa de salida
     (el caso del tutorial: el segmento entre los dos cortes)
-  - solo --start      : "on" — entra el filtro y se queda
+  - solo --start      : "on" — entra el filtro y se queda hasta el final
   - solo --end        : "off" — el clip empieza filtrado y se suelta al final
 
 Curva de las rampas (misma convención que ``voxera video zoom``, el rango
@@ -91,23 +92,30 @@ class LowPassOptions:
             raise EnhancementError(f"end ({self.end}) debe ser > start ({self.start})")
 
 
-def ease(p: float, curve: float = DEFAULT_CURVE, easing: str = "smooth") -> float:
+def ease(p, curve: float = DEFAULT_CURVE, easing: str = "smooth"):
     """Progreso con curva de easing: 0 -> 1. curve=0 => siempre lineal.
 
     Misma parametrización que ``voxera video zoom`` (convención del repo):
     a = 1 + curve/25 en la S-curva simétrica; 60-65 = el rango del creador.
+    Vectorizada: acepta escalar o array (float32 in -> float32 out);
+    devuelve float para entrada escalar.
     """
-    p = min(max(p, 0.0), 1.0)
+    pv = np.asarray(p)
+    scalar = pv.ndim == 0
+    pv = np.clip(pv, 0.0, 1.0)
     if easing == "linear":
-        return p
-    c = min(max(curve, 0.0), 100.0)
-    if easing == "out":
-        return 1 - (1 - p) ** (1 + c / 50)
-    if easing == "in":
-        return p ** (1 + c / 50)
-    a = 1 + c / 25
-    denom = p**a + (1 - p) ** a
-    return 0.0 if denom == 0 else p**a / denom
+        out = pv
+    else:
+        c = min(max(curve, 0.0), 100.0)
+        if easing == "out":
+            out = 1 - (1 - pv) ** (1 + c / 50)
+        elif easing == "in":
+            out = pv ** (1 + c / 50)
+        else:
+            a = 1 + c / 25
+            denom = pv**a + (1 - pv) ** a
+            out = pv**a / denom
+    return out.item() if scalar else out
 
 
 def _mode(opts: LowPassOptions) -> str:
@@ -124,35 +132,38 @@ def _mode(opts: LowPassOptions) -> str:
 def build_envelope(n: int, sample_rate: int, opts: LowPassOptions) -> np.ndarray:
     """Envolvente wet 0..1 (float32, longitud ``n``).
 
-    Región [a, b] con rampas S de ``transition`` s en los bordes; fuera de la
-    región la salida es el audio seco (bit-exacto). Si la región es más corta
-    que 2*transition las rampas se cruzan (pico < 1, sin sobresaltos).
+    Región [a, b] con rampas S de ``transition`` s SOLO en los bordes de
+    región explícitos (--start/--end): en modo "on" (solo --start) el filtro
+    se queda hasta el final; en "off" (solo --end) empieza ya filtrado desde
+    el inicio; sin bordes (full) rampa en ambos bordes del archivo. Fuera de
+    la región la salida es el audio seco (bit-exacto). Si la región es más
+    corta que 2*transition las rampas se cruzan (pico < 1, sin sobresaltos).
+
+    Vectorizada (sin loops por muestra): ~n float32 arrays, instantánea.
     """
     opts.validate()
     dur = n / sample_rate
     a = opts.start if opts.start is not None else 0.0
     b = opts.end if opts.end is not None else dur
-    tau = opts.transition
-    if tau <= 0.0:
-        # sin transición: paso abrupto (el "abrusco" que el tutorial evita,
-        # permitido como escape explícito)
-        env = np.zeros(n, dtype=np.float32)
-        env[int(a * sample_rate): int(b * sample_rate)] = 1.0
-        return env
+    # rampa de entrada solo si el borde de región es explícito o el modo es
+    # "full" (el clip ya cortado del tutorial: transición en ambos cortes);
+    # en modo "off" (solo --end) el clip empieza filtrado, sin rampa en 0.
+    ramp_in_active = opts.start is not None or opts.end is None
+    ramp_out_active = opts.end is not None or opts.start is None
 
-    t = np.arange(n, dtype=np.float64) / sample_rate
-    # rampa de entrada sobre [a, a+tau]
-    p_in = np.clip((t - a) / tau, 0.0, 1.0)
-    ramp_in = np.asarray([ease(p, opts.curve, opts.easing) for p in p_in], dtype=np.float64)
-    # rampa de salida sobre [b-tau, b] (invertida)
-    p_out = np.clip((b - t) / tau, 0.0, 1.0)
-    ramp_out = np.asarray([ease(p, opts.curve, opts.easing) for p in p_out], dtype=np.float64)
-    # dentro de la región: 1; el min() de las dos rampas las cruza sin
-    # superar 1 cuando la región es corta
-    inside = (t >= a) & (t <= b)
-    env = np.minimum(ramp_in, ramp_out)
-    env = np.where(inside, env, 0.0)
-    return np.asarray(env, dtype=np.float32)
+    t = np.arange(n, dtype=np.float32) / sample_rate
+    env = np.ones(n, dtype=np.float32)
+    if opts.transition > 0.0:
+        tau = float(opts.transition)
+        if ramp_in_active:
+            p_in = np.clip((t - a) / tau, 0.0, 1.0)
+            env = np.minimum(env, ease(p_in, opts.curve, opts.easing))
+        if ramp_out_active:
+            p_out = np.clip((b - t) / tau, 0.0, 1.0)
+            env = np.minimum(env, ease(p_out, opts.curve, opts.easing))
+    env[t < a] = 0.0
+    env[t > b] = 0.0
+    return env
 
 
 def apply_lowpass(samples: np.ndarray, sample_rate: int, opts: LowPassOptions) -> np.ndarray:
@@ -174,13 +185,26 @@ def apply_lowpass(samples: np.ndarray, sample_rate: int, opts: LowPassOptions) -
     return dry + (wet - dry) * env
 
 
+def _check_region(duration: float, opts: LowPassOptions) -> None:
+    """Rechaza regiones fuera del archivo (un no-op silencioso confunde)."""
+    if opts.start is not None and opts.start >= duration:
+        raise EnhancementError(
+            f"start ({opts.start}) fuera del archivo ({duration:.2f} s)"
+        )
+    if opts.end is not None and opts.end > duration:
+        raise EnhancementError(
+            f"end ({opts.end}) fuera del archivo ({duration:.2f} s)"
+        )
+
+
 def build_plan(input: str | Path, opts: LowPassOptions) -> str:
     """Plan legible para --dry-run (misma convención que enhance/video zoom)."""
     opts.validate()
     inp = Path(input)
     data = audioio.load_audio(inp)
     dur = data.duration_s
-    sr = audioio.INTERNAL_SAMPLE_RATE
+    _check_region(dur, opts)
+    sr = data.source_sample_rate
     a = opts.start if opts.start is not None else 0.0
     b = opts.end if opts.end is not None else dur
     mode = _mode(opts)
@@ -207,5 +231,6 @@ def lowpass_file(input: str | Path, output: str | Path, opts: LowPassOptions) ->
     """Aplica el efecto Pase Bajo a un archivo de audio y escribe la salida."""
     opts.validate()
     data = audioio.load_audio(input)
+    _check_region(data.duration_s, opts)
     out = apply_lowpass(data.samples, audioio.INTERNAL_SAMPLE_RATE, opts)
     return audioio.write_wav(output, out, sample_rate=audioio.INTERNAL_SAMPLE_RATE)

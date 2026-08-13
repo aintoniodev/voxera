@@ -45,6 +45,13 @@ class TestEase:
         for p in (0.2, 0.6, 0.9):
             assert al.ease(p, 80, "linear") == pytest.approx(p)
 
+    def test_ease_vectorized_matches_scalar(self):
+        ps = np.linspace(0, 1, 101, dtype=np.float32)
+        arr = al.ease(ps)
+        assert arr.shape == ps.shape and arr.dtype == np.float32
+        for i in range(0, 101, 10):
+            assert arr[i] == pytest.approx(al.ease(float(ps[i])), abs=1e-6)
+
     def test_default_matches_tutorial_range(self):
         # curva 60-65: S marcada — al 25% de la rampa casi nada, al 75% casi todo
         assert al.ease(0.25, 62) < 0.05
@@ -124,12 +131,16 @@ class TestEnvelope:
         assert env[int(1.0 * SR)] == 0.0
         assert env[int(2.5 * SR)] == pytest.approx(0.5, abs=1e-4)
         assert env[int(4.0 * SR)] == 1.0
+        # el filtro entra y se queda: sin rampa de salida en el borde del archivo
+        assert env[-1] == 1.0
 
     def test_off_mode(self):
         env = al.build_envelope(
             int(SR * 6), SR, al.LowPassOptions(end=4.0, transition=1.0)
         )
         t = np.arange(len(env)) / SR
+        # el clip empieza filtrado: sin rampa de entrada en t=0
+        assert env[0] == 1.0
         assert env[int(1.0 * SR)] == 1.0
         assert env[int(3.5 * SR)] == pytest.approx(0.5, abs=1e-4)
         assert env[int(5.0 * SR)] == 0.0
@@ -246,6 +257,14 @@ class TestEndToEnd:
         hi_in = _band_rms(x[int(2.5 * SR): int(3.5 * SR)], SR, 3000, 8000).mean()
         hi_out = _band_rms(y[int(2.5 * SR): int(3.5 * SR)], SR, 3000, 8000).mean()
         assert 20 * np.log10(hi_out / (hi_in + 1e-12)) < -20
+
+    def test_region_beyond_file_raises(self, tmp_path):
+        wav = tmp_path / "in.wav"
+        sf.write(wav, s.sibilant(1.0), SR)
+        with pytest.raises(EnhancementError):
+            al.build_plan(wav, al.LowPassOptions(start=5.0))
+        with pytest.raises(EnhancementError):
+            al.lowpass_file(wav, tmp_path / "o.wav", al.LowPassOptions(end=5.0))
 
     def test_ramp_follows_s_curve(self, tmp_path):
         x = self._noise(int(SR * 4), 3)
