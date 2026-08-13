@@ -46,3 +46,6 @@ voxera-demo/out/
 *.pfx
 .netrc
 credentials.json
+
+# vídeos personales + deliverables de fase 3 (no van al repo)
+media/videos/
