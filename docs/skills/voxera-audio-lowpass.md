@@ -46,5 +46,6 @@ NOTA: ningún criterio de audio deduce una acción visual (ponerse auriculares);
 ## Verification
 1. tests: `.venv-ims/Scripts/python.exe -m pytest tests/test_audio_lowpass.py -q` (32 tests: ease escalar+vectorizada, opciones, envolvente full/blip/on/off, región fuera de archivo, atenuación por orden, plan, e2e bit-exacto + rampa S).
 2. Demo real: `media/audio/lowpass/demo_blip.wav` (blip 4-12 s sobre el audio del tutorial de zoom) — verificado bit-exacto fuera, -27.8 dB en 3-9 kHz dentro (teoría butter2@800: -28 dB), bajo -0.1 dB, rampas ratio corr 0.999.
+2b. Demo combinado voz+zoom: `media/videos/zoomed/long1_growzoom_lowpass.mp4` — growzoom de long1 con dos frases filtradas (30.1-35.6 y 38.2-43.4 s, transition 0.5 s) coincidiendo con pulsos de zoom (t=30.76 y 38.63 s, env=0.998 en el pulso); verificado bit-exacto fuera y -26 dB en 3-9 kHz dentro. Dos blips = aplicar el CLI dos veces encadenadas (regiones disjuntas, crossfade lineal → idéntico al resultado directo).
 3. Detector de oscuridad (si se usa para replicar): sobre el audio capturado del tutorial de lowpass encuentra las regiones reales ±0.4 s; sobre material limpio (audio del tutorial de zoom) NO — esperar falsos positivos y filtrar por contexto.
 4. Suite completa: pytest tests/ (273 + 32 pasan, sin CI en el repo — verificación local).
