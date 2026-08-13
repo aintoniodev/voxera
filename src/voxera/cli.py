@@ -27,6 +27,7 @@ from voxera.restore import restore_file
 from voxera.score import score_file
 from voxera.silence import LEVELS, silence_file
 from voxera import video as video_mod
+from voxera import video_enhance
 
 PROG = "voxera"
 
@@ -296,6 +297,78 @@ def build_parser() -> argparse.ArgumentParser:
     )
     inspect_parser.add_argument("input", help="source audio file (WAV)")
     _add_common(inspect_parser)
+
+    # --- video --------------------------------------------------------------
+    video_parser = subparsers.add_parser(
+        "video",
+        help="neural video enhancement (vertical 9:16, requiere GPU CUDA)",
+        description="Enhance vertical videos: Real-ESRGAN (CUDA) + remux de audio. "
+        "Un solo default (realesr-animevideov3, ganador AB); --model x4plus es el "
+        "escape 'natural' (~10x más lento). Sin menú de presets.",
+    )
+    vsub = video_parser.add_subparsers(dest="video_command", required=True, metavar="COMMAND")
+
+    vinfo = vsub.add_parser("info", help="probe de un vídeo (ffprobe, JSON)")
+    vinfo.add_argument("input", help="archivo de vídeo")
+
+    venh = vsub.add_parser(
+        "enhance",
+        help="mejorar un vídeo (frames -> NN -> 1080x1920 -> remux audio)",
+    )
+    venh.add_argument("input", help="vídeo de entrada (vertical 9:16)")
+    venh.add_argument("-o", "--output", required=True, help="salida .mp4")
+    venh.add_argument(
+        "--model",
+        choices=video_enhance.VIDEO_MODELS,
+        default=video_enhance.DEFAULT_VIDEO_MODEL,
+        help=f"modelo (default: {video_enhance.DEFAULT_VIDEO_MODEL} — ganador AB)",
+    )
+    venh.add_argument(
+        "--fps", type=int, default=30,
+        help="fps de salida (default 30; 60 duplica el tiempo de cómputo)",
+    )
+    venh.add_argument("--width", type=int, default=1080, help="ancho de salida (default 1080)")
+    venh.add_argument("--height", type=int, default=1920, help="alto de salida (default 1920)")
+    venh.add_argument(
+        "--tile", type=int, default=512,
+        help="tile size (default 512; menor = menos VRAM)",
+    )
+    venh.add_argument("--no-half", action="store_true", help="fp32 (más VRAM, más lento)")
+    venh.add_argument(
+        "--crf", type=int, default=18,
+        help="x264 CRF (default 18; más alto = fichero más pequeño)",
+    )
+    venh.add_argument("--audio-bitrate", default="192k", help="AAC bitrate (default 192k)")
+    venh.add_argument(
+        "--master-audio", nargs="?", const=DEFAULT_PRESET, default=None,
+        metavar="PRESET",
+        help="masterizar el audio con el preset de voxera antes del remux (default: creator)",
+    )
+    venh.add_argument(
+        "--dry-run", action="store_true",
+        help="imprimir el plan y salir sin escribir nada (no carga NN)",
+    )
+    venh.add_argument(
+        "--keep-frames", action="store_true",
+        help="conservar los frames temporales (debug)",
+    )
+
+    vcmp = vsub.add_parser(
+        "compare",
+        help="montar un vídeo A/B lado a lado (herramienta de evaluación)",
+    )
+    vcmp.add_argument("a", help="primera versión (p.ej. mejorada)")
+    vcmp.add_argument("b", help="segunda versión (p.ej. mejorada)")
+    vcmp.add_argument("-o", "--output", required=True, help="salida .mp4 lado a lado")
+    vcmp.add_argument(
+        "--source", default=None,
+        help="3er panel opcional (p.ej. el original)",
+    )
+    vcmp.add_argument(
+        "--seg", nargs=2, type=float, default=None, metavar=("START", "END"),
+        help="segmento a comparar en segundos (se aplica a todos los inputs)",
+    )
+    vcmp.add_argument("--fps", type=int, default=30, help="fps de salida (default 30)")
 
     return parser
 
@@ -697,6 +770,58 @@ def _cmd_inspect(args) -> int:
     return 0
 
 
+def _cmd_video(args) -> int:
+    if args.video_command == "info":
+        try:
+            info = video_enhance.probe_video(args.input)
+        except EnhancementError as exc:
+            print(f"{PROG}: error: {exc}", file=sys.stderr)
+            return 1
+        print(json.dumps(info, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.video_command == "enhance":
+        opts = video_enhance.VideoOptions(
+            model=args.model,
+            fps=args.fps,
+            width=args.width,
+            height=args.height,
+            tile=args.tile,
+            half=not args.no_half,
+            crf=args.crf,
+            audio_bitrate=args.audio_bitrate,
+            master_audio=args.master_audio is not None,
+            master_preset=args.master_audio or DEFAULT_PRESET,
+            keep_frames=args.keep_frames,
+        )
+        try:
+            if args.dry_run:
+                print(video_enhance.build_plan(args.input, opts))
+                return 0
+            out = video_enhance.enhance_video(args.input, args.output, opts)
+        except EnhancementError as exc:
+            print(f"{PROG}: error: {exc}", file=sys.stderr)
+            return 1
+        print(f"✓ {out}")
+        return 0
+
+    if args.video_command == "compare":
+        try:
+            out = video_enhance.compare_videos(
+                args.a, args.b, args.output,
+                source=args.source,
+                seg=tuple(args.seg) if args.seg else None,
+                fps=args.fps,
+            )
+        except EnhancementError as exc:
+            print(f"{PROG}: error: {exc}", file=sys.stderr)
+            return 1
+        print(f"✓ {out}")
+        return 0
+
+    return 2
+
+
 def main(argv: list[str] | None = None) -> int:
     # Windows console/pipes default to cp1252 and crash on '✓' etc.
     for stream in (sys.stdout, sys.stderr):
@@ -721,6 +846,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_restore(args)
     if args.command == "inspect":
         return _cmd_inspect(args)
+    if args.command == "video":
+        return _cmd_video(args)
 
     parser.error(f"unknown command: {args.command}")
     return 2
