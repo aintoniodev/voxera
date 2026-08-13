@@ -164,7 +164,7 @@ def build_plan(path: str | Path, options: VideoOptions) -> str:
     lines.append(
         f"  {Path(path).name} · {probe['width']}x{probe['height']} · "
         f"{probe['fps_ratio']} fps · {probe['duration_s']:.1f} s · "
-        f"{probe['codec']} · {probe['bitrate'] / 1e6:.1f} Mbps"
+        f"{probe['codec']} · {(probe['bitrate'] or 0) / 1e6:.1f} Mbps"
     )
     lines.append("")
     lines.append("Pipeline:")
@@ -235,15 +235,6 @@ def _build_upsampler(model: str, tile: int, half: bool):
 # ---------------------------------------------------------------------------
 
 
-def _has_audio_stream(path: str | Path) -> bool:
-    proc = subprocess.run(
-        [video_mod._tool("ffprobe"), "-v", "error", "-select_streams", "a",
-         "-show_entries", "stream=codec_type", "-of", "csv=p=0", str(path)],
-        capture_output=True, text=True, timeout=60,
-    )
-    return "audio" in proc.stdout
-
-
 def enhance_video(
     input_path: str | Path,
     output_path: str | Path,
@@ -266,7 +257,7 @@ def enhance_video(
         )
     probe = probe_video(inp)
     fps = opts.fps
-    frames_expected = int(round(probe["duration_s"] * fps))
+    out.parent.mkdir(parents=True, exist_ok=True)
     log(f"[plan] {inp.name} · {probe['width']}x{probe['height']} · {probe['fps_ratio']} fps"
         f" · {probe['duration_s']:.1f} s · modelo {opts.model} -> {opts.width}x{opts.height}@{fps}fps")
 
@@ -283,6 +274,10 @@ def enhance_video(
             check=True, capture_output=True, timeout=3600,
         )
         frames = sorted((tmp / "in").glob("*.png"))
+        if not frames:
+            raise EnhancementError(
+                f"sin frames extraídos de {inp.name} (¿segmento fuera de rango o vídeo corrupto?)"
+            )
         log(f"[extract] {len(frames)} frames @ {fps}fps")
 
         # 2. audio
