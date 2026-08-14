@@ -1,11 +1,14 @@
-"""Unit tests de video teleport (teletransportación): parpadeo de silueta blanca.
+"""Unit tests de video teleport v2: teletransportación real (toma única).
 
-- Patrón de parpadeo y plan de fases por frame (2-2-2 del tutorial).
-- Silueta blanca opaca (composite) — bit-exacta fuera de la máscara.
-- Segmentación de persona (torch) o fallback diff-borde (tests sintéticos).
+- Schedule de fases por frame (white_a/empty/appear/white_b/after, vanish).
+- Primitivas: erase (plate), paste desplazado con feather, paste blanco.
+- Plate de fondo: nanmedian consciente de persona (sujeto móvil → sin agujero;
+  sujeto estático → agujero rellenado con el fondo).
 - Validación de opciones y plan --dry-run.
-- e2e sintético: cámara fija + blob móvil = "sujeto" -> parpadeo verificado
-  por fase en la salida decodificada.
+- e2e sintético: cámara fija + cuadrado móvil = "sujeto" → fases verificadas
+  por frame en la salida decodificada (shift y vanish).
+
+Los tests corren sin torch/LaMa (fallback diff-borde + relleno EDT/Telea).
 """
 
 import shutil
@@ -27,16 +30,20 @@ W, H, FPS, DUR = 180, 320, 30, 3.0
 BG_VAL, PERSON_VAL = 100, 230
 
 
-def make_source(tmp_path, name="in.mp4"):
-    """Sintético: fondo gris constante + cuadrado blanco móvil ("sujeto")."""
+def make_frames(static=False):
     total = int(round(DUR * FPS))
     bg = np.full((H, W, 3), BG_VAL, dtype=np.uint8)
     frames = []
     for i in range(total):
         fr = bg.copy()
-        y = 40 + 2 * i
+        y = 100 if static else 40 + 2 * i
         fr[y : y + 60, 60:120] = PERSON_VAL
         frames.append(fr)
+    return frames
+
+
+def make_source(tmp_path, name="in.mp4", static=False):
+    frames = make_frames(static)
     raw = b"".join(f.tobytes() for f in frames)
     out = tmp_path / name
     subprocess.run(
@@ -47,7 +54,7 @@ def make_source(tmp_path, name="in.mp4"):
          "-c:a", "aac", "-b:a", "96k", str(out)],
         input=raw, check=True, capture_output=True,
     )
-    return out, total
+    return out, len(frames)
 
 
 def decode_all(video):
@@ -82,22 +89,58 @@ class TestParsePattern:
             vt.parse_pattern("2-2-999")
 
 
+class TestParseShift:
+    def test_default_when_none(self):
+        assert vt.parse_shift(None) == (-25.0, 0.0)
+
+    def test_custom(self):
+        assert vt.parse_shift("25, -15") == (25.0, -15.0)
+        assert vt.parse_shift("0,0") == (0.0, 0.0)
+
+    def test_bad_format(self):
+        with pytest.raises(ValueError):
+            vt.parse_shift("25")
+        with pytest.raises(ValueError):
+            vt.parse_shift("a,b")
+
+    def test_out_of_range(self):
+        with pytest.raises(ValueError):
+            vt.parse_shift("95,0")
+        with pytest.raises(ValueError):
+            vt.parse_shift("0,-91")
+
+
 class TestSchedule:
-    def test_tutorial_phases(self):
-        sched = vt.flicker_schedule(f0=10, total=40, pattern="2-2-2")
+    def test_shift_mode_phases(self):
+        sched = vt.teleport_schedule(f0=10, total=40, pattern="2-2-2")
         assert [sched.get(i, "normal") for i in range(10)] == ["normal"] * 10
-        assert sched[10] == sched[11] == "white"
-        assert sched[12] == sched[13] == "gap"
-        assert sched[14] == sched[15] == "white"
-        assert [sched.get(i, "normal") for i in range(16, 40)] == ["normal"] * 24
+        assert sched[10] == sched[11] == "white_a"
+        assert sched[12] == "empty"        # hueco: primero esfumado
+        assert sched[13] == "appear"       # luego ya en B
+        assert sched[14] == sched[15] == "white_b"
+        assert all(sched[i] == "after" for i in range(16, 40))
+
+    def test_odd_gap(self):
+        # g=3: 1 empty + 2 appear
+        sched = vt.teleport_schedule(f0=5, total=20, pattern="2-3-2")
+        assert sched[7] == "empty"
+        assert sched[8] == sched[9] == "appear"
+        assert sched[10] == sched[11] == "white_b"
+        assert sched[12] == "after"
+
+    def test_vanish_mode(self):
+        sched = vt.teleport_schedule(f0=10, total=40, pattern="2-2-2", vanish=True)
+        assert sched[10] == sched[11] == "white_a"
+        # tras el blanco inicial: TODO vacío hasta el final
+        assert all(sched[i] == "empty" for i in range(12, 40))
 
     def test_truncated_near_end(self):
-        sched = vt.flicker_schedule(f0=38, total=40, pattern="2-2-2")
-        assert set(sched.values()) <= {"white", "gap", "normal"}
+        sched = vt.teleport_schedule(f0=38, total=40, pattern="2-2-2")
+        assert set(sched.values()) <= {"white_a", "empty", "appear", "white_b", "after"}
 
     def test_f0_clamped(self):
-        sched = vt.flicker_schedule(f0=0, total=10)
-        assert 1 in sched
+        sched = vt.teleport_schedule(f0=0, total=10)
+        assert 1 in sched and 0 not in sched
 
 
 class TestComposite:
@@ -110,6 +153,51 @@ class TestComposite:
         assert (out[~m] == 0).all()  # fuera de la máscara: bit-exacto
 
 
+class TestErasePaste:
+    def test_erase_replaces_with_plate(self):
+        fr = np.zeros((H, W, 3), dtype=np.uint8)
+        fr[100:160, 50:130] = PERSON_VAL
+        plate = np.full((H, W, 3), BG_VAL, dtype=np.uint8)
+        m = np.zeros((H, W), dtype=bool)
+        m[100:160, 50:130] = True
+        out = vt.erase_person(fr, m, plate)
+        assert (out[m] == BG_VAL).all()
+        assert (out[~m] == 0).all()  # fuera: intacto
+
+    def test_paste_person_moves_interior(self):
+        src = np.zeros((H, W, 3), dtype=np.uint8)
+        src[100:160, 50:130] = PERSON_VAL
+        m = np.zeros((H, W), dtype=bool)
+        m[100:160, 50:130] = True
+        out = np.full((H, W, 3), BG_VAL, dtype=np.uint8)
+        out = vt.paste_person(out, src, m, dy=10, dx=20)
+        # interior profundo del destino: píxeles exactos de la persona
+        assert (out[125:150, 85:120] == PERSON_VAL).all()
+        # zona lejana intacta
+        assert (out[:50, :40] == BG_VAL).all()
+
+    def test_paste_negative_shift(self):
+        src = np.zeros((H, W, 3), dtype=np.uint8)
+        src[100:160, 50:130] = PERSON_VAL
+        m = np.zeros((H, W), dtype=bool)
+        m[100:160, 50:130] = True
+        out = np.full((H, W, 3), BG_VAL, dtype=np.uint8)
+        out = vt.paste_person(out, src, m, dy=0, dx=-40)
+        assert (out[115:150, 30:60] == PERSON_VAL).all()
+
+    def test_paste_white(self):
+        out = np.zeros((H, W, 3), dtype=np.uint8)
+        m = np.zeros((H, W), dtype=bool)
+        m[100:160, 50:130] = True
+        out = vt.paste_white(out, m, dy=0, dx=30)
+        assert out[110:150, 90:150].mean() > 250
+
+    def test_shift_slices_out_of_frame(self):
+        m = np.zeros((H, W), dtype=bool)
+        m[100:160, 50:130] = True
+        assert vt._shift_slices((H, W), m, dy=0, dx=-500) is None
+
+
 class TestPersonMask:
     def test_fallback_finds_subject_on_uniform_bg(self):
         # sin torch (tests en .venv-ims): fallback diff-borde
@@ -120,9 +208,27 @@ class TestPersonMask:
         assert m[:80, :40].mean() < 0.05
 
 
+class TestPlate:
+    def test_moving_subject_no_hole(self, tmp_path):
+        # sujeto móvil: la nanmedian consciente recupera TODO el fondo
+        src, _ = make_source(tmp_path)
+        plate, engine = vt.build_plate(src, samples=16)
+        assert plate.shape == (H, W, 3)
+        assert np.abs(plate.astype(int) - BG_VAL).mean() < 3
+        assert engine in {"nanmedian", "lama", "telea", "edt"}
+
+    def test_static_subject_hole_filled(self, tmp_path):
+        # sujeto estático: agujero persistente rellenado con el fondo uniforme
+        src, _ = make_source(tmp_path, static=True)
+        plate, engine = vt.build_plate(src, samples=8)
+        assert np.abs(plate.astype(int) - BG_VAL).mean() < 3
+
+
 class TestValidate:
     def test_ok(self):
         vt.TeleportOptions(time=1.0).validate()
+        vt.TeleportOptions(time=1.0, vanish=True).validate()
+        vt.TeleportOptions(time=1.0, shift="30,-10").validate()
 
     def test_bad_pattern(self):
         with pytest.raises(EnhancementError):
@@ -132,38 +238,84 @@ class TestValidate:
         with pytest.raises(EnhancementError):
             vt.TeleportOptions(time=-1).validate()
 
+    def test_bad_shift(self):
+        with pytest.raises(EnhancementError):
+            vt.TeleportOptions(time=1.0, shift="nope").validate()
+        with pytest.raises(EnhancementError):
+            vt.TeleportOptions(time=1.0, shift="99,0").validate()
+
+    def test_bad_plate_samples(self):
+        with pytest.raises(EnhancementError):
+            vt.TeleportOptions(time=1.0, plate_samples=1).validate()
+
 
 class TestPlan:
-    def test_plan_mentions_effect(self, tmp_path):
+    def test_plan_mentions_shift(self, tmp_path):
         src = make_source(tmp_path)[0]
-        plan = vt.build_plan(src, vt.TeleportOptions(time=1.0))
+        plan = vt.build_plan(src, vt.TeleportOptions(time=1.0, shift="25,0"))
         assert "VOXERA PLAN" in plan and "teleport" in plan
-        assert "2-2-2" in plan and "parpadeo" in plan
+        assert "2-2-2" in plan and "reaparece" in plan
+
+    def test_plan_mentions_vanish(self, tmp_path):
+        src = make_source(tmp_path)[0]
+        plan = vt.build_plan(src, vt.TeleportOptions(time=1.0, vanish=True))
+        assert "desaparece" in plan and "plate" in plan
 
 
 # --------------------------------------------------------------------- e2e
 
 class TestEndToEnd:
-    def test_flicker_pattern_in_output(self, tmp_path):
+    def test_shift_teleport_in_output(self, tmp_path):
         src, total = make_source(tmp_path)
         out = tmp_path / "teleport.mp4"
-        vt.teleport_video(src, out, vt.TeleportOptions(time=1.5))
+        vt.teleport_video(src, out, vt.TeleportOptions(time=1.5, shift="-25,0"))
         frames = decode_all(out)
         srcf = decode_all(src)
         assert len(frames) == len(srcf) == total
 
-        f0 = int(round(1.5 * FPS))
-        # frames blancos: interior del sujeto blanco (silueta)
-        for i in (f0, f0 + 1, f0 + 4, f0 + 5):
-            y = 40 + 2 * i
-            sq = (slice(y + 4, y + 56), slice(64, 116))
-            assert frames[i][sq].mean() > 250, i
-        # hueco: igual que la fuente
-        for i in (f0 + 2, f0 + 3):
+        f0 = int(round(1.5 * FPS))  # 45
+        dx = int(round(-0.25 * W))  # -45
+
+        def sq_y(i):
+            return 40 + 2 * i
+
+        # white_a: el cuadrado en A se vuelve blanco
+        for i in (f0, f0 + 1):
+            y = sq_y(i)
+            assert frames[i][y + 10 : y + 50, 70:110].mean() > 250, i
+        # empty: fondo en todo el frame (persona esfumada)
+        assert np.abs(frames[f0 + 2].astype(int) - BG_VAL).mean() < 3, f0 + 2
+        # appear: cuadrado ya en B (x+dx), A vacío
+        y = sq_y(f0 + 3)
+        assert frames[f0 + 3][y + 10 : y + 50, 60 + dx + 10 : 60 + dx + 50].mean() > 200
+        assert np.abs(frames[f0 + 3][:, 70:110].astype(int) - BG_VAL).mean() < 3
+        # white_b: blanco en B
+        for i in (f0 + 4, f0 + 5):
+            y = sq_y(i)
+            assert frames[i][y + 10 : y + 50, 60 + dx + 10 : 60 + dx + 50].mean() > 250, i
+        # after: cuadrado vivo en B, A vacío
+        for i in (f0 + 6, f0 + 20, total - 1):
+            y = sq_y(i)
+            assert frames[i][y + 10 : y + 50, 60 + dx + 10 : 60 + dx + 50].mean() > 200, i
+            assert np.abs(frames[i][:, 70:110].astype(int) - BG_VAL).mean() < 3, i
+        # antes del parpadeo: bit-exacto
+        for i in (0, 10, f0 - 1):
             assert np.abs(frames[i].astype(int) - srcf[i].astype(int)).mean() < 2, i
-        # fuera de la ventana: igual que la fuente (bit-exacto)
-        for i in (0, 10, f0 + 20, total - 1):
-            assert np.abs(frames[i].astype(int) - srcf[i].astype(int)).mean() < 2, i
+
+    def test_vanish_in_output(self, tmp_path):
+        src, total = make_source(tmp_path)
+        out = tmp_path / "vanish.mp4"
+        vt.teleport_video(src, out, vt.TeleportOptions(time=1.0, vanish=True))
+        frames = decode_all(out)
+        f0 = int(round(1.0 * FPS))  # 30
+        # white_a: blanco
+        y = 40 + 2 * f0
+        assert frames[f0][y + 10 : y + 50, 70:110].mean() > 250
+        # desde el hueco hasta el final: TODO fondo
+        for i in (f0 + 2, f0 + 10, total - 1):
+            assert np.abs(frames[i].astype(int) - BG_VAL).mean() < 3, i
+        # antes: intacto
+        assert np.abs(frames[0].astype(int) - decode_all(src)[0].astype(int)).mean() < 2
 
     def test_audio_remuxed(self, tmp_path):
         src, _ = make_source(tmp_path)

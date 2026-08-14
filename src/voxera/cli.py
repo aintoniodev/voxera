@@ -447,18 +447,32 @@ def build_parser() -> argparse.ArgumentParser:
 
     vtel = vsub.add_parser(
         "teleport",
-        help="teletransportación: parpadeo de silueta blanca (tutorial @serri.mp4, sin Premiere)",
-        description="Replicación del efecto 'teletransportación' de @serri.mp4: la persona "
-        "parpadea en silueta blanca opaca (2 frames blanco, hueco, 2 frames blanco — "
-        "el Tinción negro→blanco 100%). Es un parpadeo de TRANSICIÓN entre tomas "
-        "(como en los vídeos de Ibai), no una desaparición sostenida. Silueta por "
-        "segmentación de persona (torchvision DeepLabV3); 100%% numpy/torch, sin GPU.",
+        help="teletransportación real: parpadeo blanco + la persona desaparece de A y reaparece en B",
+        description="Teletransportación sobre toma única con cámara fija: parpadeo de "
+        "silueta blanca 2-2-2 (tutorial @serri.mp4) y, bajo el parpadeo, la persona "
+        "se BORRA de su posición (fondo reconstruido: mediana consciente de persona "
+        "+ inpainting LaMa) y REAPARECE desplazada (recorte vivo por segmentación, "
+        "pegado frame a frame). Con --vanish desaparece sin reaparecer.",
     )
     vtel.add_argument("input", help="vídeo de entrada")
     vtel.add_argument("-o", "--output", required=True, help="salida .mp4")
     vtel.add_argument(
         "--time", type=float, required=True,
-        help="instante del parpadeo en segundos (primer frame blanco)",
+        help="instante del teletransporte en segundos (primer frame blanco)",
+    )
+    vtel.add_argument(
+        "--shift", default=None, metavar="DX,DY",
+        help=f"destino B como 'dx,dy' en %% del ancho/alto (default "
+             f"{video_teleport.DEFAULT_SHIFT} = reaparece a la izquierda); "
+             "p.ej. '25,0' derecha, '0,-15' arriba",
+    )
+    vtel.add_argument(
+        "--vanish", action="store_true",
+        help="la persona desaparece y NO reaparece (se ve el fondo el resto del vídeo)",
+    )
+    vtel.add_argument(
+        "--plate-samples", type=int, default=video_teleport.DEFAULT_PLATE_SAMPLES,
+        help=f"frames muestreados para reconstruir el fondo (default {video_teleport.DEFAULT_PLATE_SAMPLES})",
     )
     vtel.add_argument(
         "--pattern", default=video_teleport.DEFAULT_PATTERN,
@@ -1154,7 +1168,10 @@ def _cmd_video(args) -> int:
         opts = video_teleport.TeleportOptions(
             time=args.time,
             pattern=args.pattern,
+            shift=args.shift,
+            vanish=args.vanish,
             dilate=args.dilate,
+            plate_samples=args.plate_samples,
             crf=args.crf,
             audio_bitrate=args.audio_bitrate,
         )
