@@ -75,8 +75,7 @@ curl -L --fail -o models/video/RealESRGAN_x4plus.pth https://github.com/xinntao/
 .venv-video/Scripts/voxera video enhance in.mp4 -o out.mp4 --dry-run        # plan, no escribe nada
 .venv-video/Scripts/voxera video compare a.mp4 b.mp4 -o ab.mp4 --source orig.mp4   # A/B 3 paneles
 .venv-video/Scripts/voxera video zoom in.mp4 -o out.mp4 --anchor 0.5,0.33              # zoom Grow (ffmpeg, sin GPU)
-.venv-video/Scripts/voxera video teleport in.mp4 -o out.mp4 --time 36 --remove         # teletransportación: silueta blanca 2-2-2 + desaparición (cámara fija)
-.venv-video/Scripts/voxera video teleport in.mp4 -o out.mp4 --time 36                  # solo el parpadeo de silueta (transición entre tomas)
+.venv-video/Scripts/voxera video teleport in.mp4 -o out.mp4 --time 36                  # teletransportación: parpadeo de silueta blanca 2-2-2 (transición, seg de persona)
 .venv-video/Scripts/voxera video magnify in.mp4 -o out.mp4 --center 0.5,0.4           # lente Magnify (ffmpeg, sin GPU)
 .venv-video/Scripts/voxera video stabilize in.mp4 -o out.mp4                     # anti-temblor de mano (OpenCV+ffmpeg, sin GPU)
 .venv-ims/Scripts/voxera audio lowpass in.wav -o out.wav --start 4 --end 12           # efecto Pase Bajo (numpy/scipy)

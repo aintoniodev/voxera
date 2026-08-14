@@ -449,11 +449,12 @@ def build_parser() -> argparse.ArgumentParser:
         "teleport",
         help="teletransportación: parpadeo de silueta blanca (tutorial @serri.mp4, sin Premiere)",
         description="Replicación del efecto 'teletransportación' de @serri.mp4: la persona "
-        "parpadea en silueta blanca opaca (2 frames blanco, hueco, 2 frames blanco) "
-        "y, con --remove, desaparece por completo (inpaint con el fondo mediano). "
-        "Requiere cámara fija (trípode). 100%% numpy/scipy, sin GPU.",
+        "parpadea en silueta blanca opaca (2 frames blanco, hueco, 2 frames blanco — "
+        "el Tinción negro→blanco 100%). Es un parpadeo de TRANSICIÓN entre tomas "
+        "(como en los vídeos de Ibai), no una desaparición sostenida. Silueta por "
+        "segmentación de persona (torchvision DeepLabV3); 100%% numpy/torch, sin GPU.",
     )
-    vtel.add_argument("input", help="vídeo de entrada (cámara fija)")
+    vtel.add_argument("input", help="vídeo de entrada")
     vtel.add_argument("-o", "--output", required=True, help="salida .mp4")
     vtel.add_argument(
         "--time", type=float, required=True,
@@ -465,27 +466,9 @@ def build_parser() -> argparse.ArgumentParser:
         f"— los 2-2-2 del tutorial: 2 blanco, hueco, 2 blanco)",
     )
     vtel.add_argument(
-        "--remove", action="store_true",
-        help="teletransportación completa: tras el parpadeo el sujeto desaparece "
-        "(inpaint con el fondo mediano) y la silueta queda congelada --hold segundos",
-    )
-    vtel.add_argument(
-        "--hold", type=float, default=video_teleport.DEFAULT_HOLD,
-        help=f"segundos de silueta congelada tras el parpadeo, solo con --remove "
-        f"(default {video_teleport.DEFAULT_HOLD:g})",
-    )
-    vtel.add_argument(
         "--dilate", type=int, default=video_teleport.DEFAULT_DILATE,
         help=f"px de dilatación de la silueta (default {video_teleport.DEFAULT_DILATE}; "
         "más = cubre mejor al sujeto, menos = silueta más fiel)",
-    )
-    vtel.add_argument(
-        "--threshold", type=int, default=video_teleport.DEFAULT_THRESHOLD,
-        help=f"umbral de diff por canal RGB para la máscara (default {video_teleport.DEFAULT_THRESHOLD})",
-    )
-    vtel.add_argument(
-        "--bg-frames", type=int, default=video_teleport.DEFAULT_BG_FRAMES,
-        help=f"fotogramas muestreados para el fondo mediano (default {video_teleport.DEFAULT_BG_FRAMES})",
     )
     vtel.add_argument(
         "--crf", type=int, default=18,
@@ -1171,11 +1154,7 @@ def _cmd_video(args) -> int:
         opts = video_teleport.TeleportOptions(
             time=args.time,
             pattern=args.pattern,
-            remove=args.remove,
-            hold=args.hold,
             dilate=args.dilate,
-            threshold=args.threshold,
-            bg_frames=args.bg_frames,
             crf=args.crf,
             audio_bitrate=args.audio_bitrate,
         )
