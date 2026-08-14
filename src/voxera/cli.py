@@ -716,6 +716,23 @@ def build_parser() -> argparse.ArgumentParser:
         f"medido en el tutorial): 1 = 6 dB/oct, 2 = 12 dB/oct, 4 = 24 dB/oct",
     )
     alow.add_argument(
+        "--resonance", type=float, default=None,
+        help="Q del LPF 0.5-2.0 (default: Butterworth Q=0.707 — sin pico, el "
+        "comportamiento original); Q>0.707 => pico en el cutoff, carácter "
+        "'de caja'/'orejas tapadas'. Solo con order 2 o 4.",
+    )
+    alow.add_argument(
+        "--occlusion", type=float, default=audio_lowpass.DEFAULT_OCCLUSION,
+        help=f"refuerzo de graves en dB 0-12 (default {audio_lowpass.DEFAULT_OCCLUSION:g} "
+        f"= off): el 'efecto de oclusión' de taparse las orejas — la conducción "
+        f"ósea refuerza ~100-500 Hz; un LPF solo corta agudos",
+    )
+    alow.add_argument(
+        "--shelf", type=float, default=audio_lowpass.DEFAULT_SHELF,
+        help=f"frecuencia central del shelf de oclusión en Hz (default "
+        f"{audio_lowpass.DEFAULT_SHELF:g})",
+    )
+    alow.add_argument(
         "--start", type=float, default=None,
         help="inicio de la región filtrada en s (default: principio del clip)",
     )
@@ -1307,6 +1324,9 @@ def _cmd_audio(args) -> int:
             curve=args.curve,
             easing=args.easing,
             order=args.order,
+            resonance=args.resonance,
+            occlusion=args.occlusion,
+            shelf=args.shelf,
             start=args.start,
             end=args.end,
         )
