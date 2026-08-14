@@ -9,8 +9,8 @@
 
 - **Producto:** `voxera` — post-producción de voz/podcast con red neuronal.
   Tagline: **"Sound like you, only better."**
-- **Repo:** https://github.com/aintoniodev/voxera (🔒 privado, `master`, 16 commits pusheados).
-  Usuario GitHub: **aintoniodev** (token de gh autentica como aintoniodev aunque `gh auth status` muestre un nombre stale).
+- **Repo:** https://github.com/aintoniodev/voxera (🌍 público, `master`).
+  Usuario GitHub: **aintoniodev** (identidad de commits: `aintonio.dev <58003439+aintoniodev@users.noreply.github.com>`).
 - **Marca:** aintonio.dev | Antonio Gómez — AI Engineer, reto de 30 días con @troponcho.
   El primer vídeo (fase 1) muestra: audio crudo → red neuronal → audio mejorado → CTA "descárgalo" (→ voxera).
 - **Premisa NO negociable:** todo debe ser **accesible/drivable desde terminal** para que el agente edite y toquetee absolutamente todo. El CLI es el héroe; la UI (Tauri) es una envoltura.

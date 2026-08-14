@@ -28,7 +28,7 @@ set -u
 
 ROLE="$1"; WORKTREE="$2"; RECEIVE_MODE="$3"; PROMPT_FILE="$4"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ORCA_BIN="${ORCA_CLI_COMMAND:-$(command -v orca 2>/dev/null || echo /c/Users/otero/AppData/Local/Programs/orca/resources/bin/orca)}"
+ORCA_BIN="${ORCA_CLI_COMMAND:-$(command -v orca 2>/dev/null || echo "$LOCALAPPDATA/Programs/orca/resources/bin/orca")}"
 # the agent CLI run inside the orca terminal; `pi -p` expands $(cat <file>)
 # itself, so the prompt file path can be passed shell-style.
 AGENT_CMD="${SWARMFORGE_ORCA_AGENT:-pi -p \"\$(cat %s)\"}"
