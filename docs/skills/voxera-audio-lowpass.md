@@ -49,3 +49,63 @@ NOTA: ningún criterio de audio deduce una acción visual (ponerse auriculares);
 2b. Demo combinado voz+zoom: `media/videos/zoomed/long1_growzoom_lowpass.mp4` — growzoom de long1 con dos frases filtradas (30.1-35.6 y 38.2-43.4 s, transition 0.5 s) coincidiendo con pulsos de zoom (t=30.76 y 38.63 s, env=0.998 en el pulso); verificado bit-exacto fuera y -26 dB en 3-9 kHz dentro. Dos blips = aplicar el CLI dos veces encadenadas (regiones disjuntas, crossfade lineal → idéntico al resultado directo).
 3. Detector de oscuridad (si se usa para replicar): sobre el audio capturado del tutorial de lowpass encuentra las regiones reales ±0.4 s; sobre material limpio (audio del tutorial de zoom) NO — esperar falsos positivos y filtrar por contexto.
 4. Suite completa: pytest tests/ (273 + 32 pasan, sin CI en el repo — verificación local).
+
+## Reference Implementation (código núcleo)
+
+El efecto completo es reproducible en ~40 líneas: filtro Butterworth + crossfade seco/húmedo con envolvente de rampas S. La clave: fuera de la región `env=0` → salida **bit-exacta** al original; la envolvente DEBE ser vectorizada (la versión con loop Python por muestra tardaba 25.8 s y 623 MB para 3 min; la vectorizada 1.4 s).
+
+```python
+import numpy as np
+from scipy.signal import butter, sosfilt
+
+def ease(p, curve: float = 62.0, easing: str = "smooth"):
+    """Vectorizada: acepta escalar o array float32. Misma curva que voxera video zoom."""
+    pv = np.asarray(p)
+    scalar = pv.ndim == 0
+    pv = np.clip(pv, 0.0, 1.0)
+    if easing == "linear":
+        out = pv
+    else:
+        c = min(max(curve, 0.0), 100.0)
+        if easing == "out":
+            out = 1 - (1 - pv) ** (1 + c / 50)
+        elif easing == "in":
+            out = pv ** (1 + c / 50)
+        else:
+            a = 1 + c / 25
+            denom = pv**a + (1 - pv) ** a
+            out = pv**a / denom
+    return out.item() if scalar else out
+
+def build_envelope(n: int, sr: int, start, end, transition=1.0, curve=62.0,
+                   easing="smooth") -> np.ndarray:
+    """Envolvente wet 0..1. Modo según bordes: (start,end)=(None,None)=full
+    (rampa en ambos bordes del archivo); (S,E)=blip; (S,None)=on (se queda);
+    (None,E)=off (empieza filtrado). Rampas SOLO en bordes explícitos.
+    Si la región < 2*transition las rampas se cruzan (pico<1, sin sobresaltos)."""
+    dur = n / sr
+    a = start if start is not None else 0.0
+    b = end if end is not None else dur
+    ramp_in = start is not None or end is None
+    ramp_out = end is not None or start is None
+    t = np.arange(n, dtype=np.float32) / sr
+    env = np.ones(n, dtype=np.float32)
+    if transition > 0.0:
+        if ramp_in:
+            env = np.minimum(env, ease(np.clip((t - a) / transition, 0, 1), curve, easing))
+        if ramp_out:
+            env = np.minimum(env, ease(np.clip((b - t) / transition, 0, 1), curve, easing))
+    env[t < a] = 0.0
+    env[t > b] = 0.0
+    return env
+
+def apply_lowpass(samples: np.ndarray, sr: int, cutoff=800.0, order=2, **env_kw) -> np.ndarray:
+    """out = dry + (wet - dry) * env. Fuera de la región: bit-exacto."""
+    dry = np.asarray(samples, dtype=np.float32).reshape(-1)
+    sos = butter(order, cutoff, btype="lowpass", fs=sr, output="sos")
+    wet = np.asarray(sosfilt(sos, dry), dtype=np.float32)
+    env = build_envelope(len(dry), sr, **env_kw)
+    return dry + (wet - dry) * env
+```
+
+Defaults medidos del tutorial (2026-08-13): cutoff 800 Hz, transition 1 s (Constant Power de Premiere), order 2 (pendiente ~12 dB/oct), curve 62. La verificación de la rampa usa el método RATIO (`env_out/env_in` sigue `1-ease`, corr 0.999) — la correlación directa sobre material con voz da ~0.5 por los sibilantes.
