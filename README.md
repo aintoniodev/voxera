@@ -332,7 +332,7 @@ src/voxera/   enhance() contract, backend registry, audioio (policy), dsp/ (pipe
               video_enhance.py (fase 3: Real-ESRGAN CUDA)
 features/     Gherkin: enhance-cli (10 escenarios), master-cli (5), analyze-cli (3)
 acceptance/   APS Gherkin acceptance pipeline (parse→dry-check→generate→run)
-tests/        195+ pytest unit tests (tracks 0-5 + fase 1 + video_enhance)
+tests/        411 pytest unit tests en .venv-ims (3 skipped) + 44 stabilize en .venv-video
 ui/           UI thin (index + A/B player + video.html + server.py: /enhance /score /vote /api/video)
 .auto/v2/     benchmark v2: synthetic + real separados (reports/*.md)
 swarmforge/   SwarmForge four-pack (specifier→coder→refactorer→architect)

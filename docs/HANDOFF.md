@@ -29,7 +29,7 @@
   - Exit codes: 0 OK · 1 error · 2 uso/backend · **20 VOXERA_NO_SPEECH** (gate en master + enhance con pipeline; el enhance legacy sin preset NO lleva gate).
   - Default backend: `deepfilternet` (DeepFilterNet2, pf=off) — ganador del autoresearch (pesq 3.275, rtf 0.084 CPU).
   - Política formatos: input 16/22.05/44.1/48 kHz mono/stereo → interno 48k mono (0.5·(L+R), soxr) → WAV PCM_24.
-- **Tests:** 196/196 pasan — `.venv-ims/Scripts/python.exe -m pytest tests/ -q` (~4 min).
+- **Tests:** suite audio/CLI en `.venv-ims` verde — `python -m pytest tests/` → **411 passed, 3 skipped**; los 12 de `test_video_stabilize` requieren cv2 y corren en `.venv-video` (44/44).
 - **Spec Gherkin:** `features/{enhance,master,analyze,score,silence,restore}-cli.feature` (25 escenarios, pipeline APS verde:
   `python -m acceptance.pipeline features`). Steps en `acceptance/steps.py` (dialecto "I run voxera …").
 - **Envs:**
@@ -54,7 +54,7 @@
   - `~/.config/psmux/psmux.conf` con default-shell Git Bash (backslashes DOBLADOS). `~/.bash_profile` carga `~/.bashrc` (bb en PATH).
   - Handoffs: helpers en `swarmforge/scripts/`; daemon `handoffd.bb`; estado en `.swarmforge/`.
 - **Autoresearch:** `.auto/` (gitignored) — measure.py (test set Piper ES+EN sintetizado, 12 clips, PESQ/STOI/SI-SNR/RTF vs clean), candidate.json, log.jsonl (22 configs). **VEREDICTO FINAL: DeepFilterNet2 pf=off.** resemble rinde peor en PESQ (full 1.74@rtf12.8, denoise_only 2.24@0.71) — AB subjetivo diferido. Los 2 agentes terminaron.
-- **Fase 2 COMPLETA**: tracks 0-8 implementados (196 tests, 25 escenarios APS).
+- **Fase 2 COMPLETA**: tracks 0-8 implementados (411 tests + 25 escenarios APS; stabilize E2E en `.venv-video`).
   - **Benchmark real ejecutado** con los 15 clips de `media/` → `.auto/v2/reports/real.md` (decisión #3 ✅).
   - **Tests AB preparados**: 60 pares (A/B/C/D, -16 LUFS) en `.auto/human/conditions/` + `pairs.json`.
   - **Tauri hecho**: `voxera-desktop/src-tauri/target/release/voxera-desktop.exe` + instaladores
@@ -76,7 +76,7 @@
 
 ## 6. Pendientes / candidatos fase 2
 
-- ~~**Tracks 0/1A/1/1B/2/3/4/5/6/8/7-UI**~~ ✅ implementados (195 tests, 25 escenarios APS).
+- ~~**Tracks 0/1A/1/1B/2/3/4/5/6/8/7-UI**~~ ✅ implementados (411 tests + 25 escenarios APS).
 - **CLIPS REALES de Antonio (decisión #3)**: 10-30 grabaciones (mic, phone, webcam, fan, AC, room, street)
   → `.auto/v2/real/*.wav` → `python .auto/v2/benchmark.py --suite real` → reporte real.md.
 - **Escucha Track 8** (decisión #12): 5-10 oyentes con `ui/ab-player.html` vía `ui/server.py` → `.auto/human/votes.csv`.
@@ -91,7 +91,8 @@
 
 ```bash
 cd <proyecto>
-.venv-ims/Scripts/python.exe -m pytest tests/ -q          # 195 passed (~3 min)
+.venv-ims/Scripts/python.exe -m pytest tests/ -q          # 411 passed, 3 skipped (12 stabilize requieren cv2 → .venv-video)
+.venv-video/Scripts/python.exe -m pytest tests/test_video_stabilize.py -q   # 44 passed
 .venv-ims/Scripts/python.exe -m acceptance.pipeline features  # 6 features verdes (25 escenarios)
 .venv-ims/Scripts/voxera analyze media/demo-chorros-antes.wav          # análisis TTY
 .venv-ims/Scripts/voxera enhance media/demo-chorros-antes.wav -o out.wav --preset youtube  # NN + master
