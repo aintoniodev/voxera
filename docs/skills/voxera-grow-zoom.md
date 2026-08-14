@@ -21,6 +21,8 @@ Aplicar zooms programáticos a vídeos (voxera video zoom), editar src/voxera/vi
 - Mediciones trampa: con grow (sin bordes negros) el umbral >20 da span completo siempre; con shrink la fila 0 es negra (el rect sale por arriba) — medir la fila central con luma exacta (v-16)/219*W.
 - zoompan clampa z a [1,10]; el shrink debe expresarse como zpan>=1 (pre-escala a zmin + pad) para no depender del clamp.
 - fps del probe del input: pasarla a build_zoom_filter (out_fps) o los timestamps del zoompan no cuadran con los pulsos.
+- Input VFR (frame rate variable): el probe usa `r_frame_rate` (p.ej. 60) pero el playback real es `avg_frame_rate` (p.ej. 1557 frames / 60.44s ≈ 25.76fps). Sin normalizar, la verificación falla con "duración inesperada" (50.43s vs 60.44s en long2.mp4). Fix: ANTEPONER `fps={out_fps}` al inicio de la cadena (VFR→CFR) en build_zoom_filter, TANTO en grow/pulse como en shrink. Detectarlo: `ffprobe ... -show_entries stream=r_frame_rate,avg_frame_rate,nb_frames` — si diffieren y nb_frames/duration ≠ r_frame_rate, es VFR.
+- Verificación SSIM con input VFR: NUNCA extraer frames por timestamp (`-ss t`) para comparar contra un input VFR — los frames quedan desalineados y el SSIM cae a ~0.79 en baseline sin haber zoom. Comparar frame-accurate: generar una referencia CFR (mismo pipeline, `--pct 1 --curve 0` o `fps=N` a secas) y extraer por índice (`select=eq(n\,K)`); el baseline entonces da ~0.96 (piso de doble re-encode) y el pico del zoom mide el z real (búsqueda de escala 1.0-1.5, SSIM máximo en z esperado).
 
 ## Verification
 1. tests: `.venv-ims/Scripts/python.exe -m pytest tests/test_video_zoom.py -q` (38 tests: curva, fases, validación, plan, e2e grow/shrink/pulse/auto-emphasis)

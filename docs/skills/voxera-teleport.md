@@ -123,6 +123,8 @@ def paste_person(out: np.ndarray, frame: np.ndarray, mask: np.ndarray,
                  dy: int, dx: int, feather: float = 1.5) -> np.ndarray:
     """Pega la persona VIVA desplazada (dy,dx) con borde suave.
     OJO: lee del frame ORIGINAL, nunca del ya borrado."""
+    if not mask.any():
+        return out  # persona no detectada: no-op (ys.min() sobre vacío explota)
     H, W = out.shape[:2]
     ys, xs = np.where(mask)
     y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1

@@ -327,6 +327,7 @@ def build_zoom_filter(
         # zoompan (medido); '1.25-0.25*x' anima bien.
         zpan = f"{_fmt(1 / zmin)}-{_fmt(opts.pct / 100 / zmin)}*({pulse})"
         return (
+            f"fps={out_fps},"  # normaliza VFR -> CFR (timestamps del zoompan)
             f"scale={iw_}:{ih_}:flags=lanczos,"
             f"pad={cw}:{ch}:x={px}:y={py}:color=black,"
             f"zoompan=z='{zpan}':x='(iw-iw/zoom)*{_fmt(ax_e)}':"
@@ -338,6 +339,7 @@ def build_zoom_filter(
     # grow / pulse: z >= 1 siempre
     z = f"(1+{_fmt(opts.pct / 100)}*({pulse}))"
     return (
+        f"fps={out_fps},"  # normaliza VFR -> CFR (timestamps del zoompan)
         f"scale={cw}:{ch}:flags=lanczos,"
         f"zoompan=z='{z}':x='(iw-iw/zoom)*{_fmt(ax)}':"
         f"y='(ih-ih/zoom)*{_fmt(ay)}':d=1:fps={out_fps}:s={cw}x{ch},"

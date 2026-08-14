@@ -66,13 +66,27 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import cv2
 import numpy as np
 from scipy.ndimage import gaussian_filter1d
 
 from voxera import video as video_mod
 from voxera import video_enhance as ve
 from voxera.errors import EnhancementError
+
+_CV2 = None
+
+
+def _cv2():
+    """OpenCV perezoso — solo el subcomando ``video stabilize`` lo necesita.
+
+    El resto del CLI (audio) no debe arrastrar opencv-python; el import en
+    carga rompía ``voxera`` en venvs de audio (sin cv2).
+    """
+    global _CV2
+    if _CV2 is None:
+        import cv2
+        _CV2 = cv2
+    return _CV2
 
 DEFAULT_SMOOTHING = 15.0       # sigma del gaussiano sobre la trayectoria (frames)
 DEFAULT_MAX_ANGLE = 1.5        # grados por frame; 0 = sin límite
@@ -355,16 +369,17 @@ def estimate_motion(
     (el llamador hereda la transformación anterior). ``prev_pts`` None
     fuerza redetección de features Shi-Tomasi.
     """
+    cv = _cv2()
     if prev_pts is None or len(prev_pts) < 2:
-        prev_pts = cv2.goodFeaturesToTrack(
+        prev_pts = cv.goodFeaturesToTrack(
             prev_gray, MAX_CORNERS, qualityLevel=0.01, minDistance=8
         )
         if prev_pts is None or len(prev_pts) < 2:
             return None, None
-    cur_pts, status, err = cv2.calcOpticalFlowPyrLK(
+    cur_pts, status, err = cv.calcOpticalFlowPyrLK(
         prev_gray, gray, prev_pts, None,
         winSize=(21, 21), maxLevel=3,
-        criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01),
+        criteria=(cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT, 30, 0.01),
     )
     if cur_pts is None:
         return None, prev_pts
@@ -376,8 +391,8 @@ def estimate_motion(
     keep = ok & (err.ravel() <= max(thr, 1e-6))
     if keep.sum() < MIN_INLIERS:
         return None, prev_pts
-    M, inliers = cv2.estimateAffinePartial2D(
-        prev_pts[keep], cur_pts[keep], method=cv2.RANSAC, ransacReprojThreshold=3.0
+    M, inliers = cv.estimateAffinePartial2D(
+        prev_pts[keep], cur_pts[keep], method=cv.RANSAC, ransacReprojThreshold=3.0
     )
     good = cur_pts[keep]
     if M is None or inliers is None or int(inliers.sum()) < MIN_INLIERS:
@@ -436,6 +451,7 @@ def estimate_trajectory(input: str | Path, opts: StabilizeOptions) -> tuple[Traj
     Devuelve (trajectory, info) con info = {w, h, fps, est_scale, max_shift}.
     """
     opts.validate()
+    cv = _cv2()
     inp = Path(input)
     probe = ve.probe_video(inp)
     w, h = probe["width"], probe["height"]
@@ -461,16 +477,16 @@ def estimate_trajectory(input: str | Path, opts: StabilizeOptions) -> tuple[Traj
             if not raw or len(raw) < frame_size:
                 break
             frame = np.frombuffer(raw, dtype=np.uint8).reshape(h, w, 3)
-            gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+            gray = cv.cvtColor(frame, cv.COLOR_RGB2GRAY)
             small = (
-                cv2.resize(gray, (max(int(round(w * est_scale)), 2),
+                cv.resize(gray, (max(int(round(w * est_scale)), 2),
                                   max(int(round(h * est_scale)), 2)),
-                           interpolation=cv2.INTER_AREA)
+                           interpolation=cv.INTER_AREA)
                 if est_scale < 1.0 else gray
             )
             if prev_gray_small is None:
                 traj.rel.append(np.eye(2, 3))
-                prev_pts = cv2.goodFeaturesToTrack(
+                prev_pts = cv.goodFeaturesToTrack(
                     small, MAX_CORNERS, qualityLevel=0.01, minDistance=8
                 )
                 traj.features_ok = prev_pts is not None and len(prev_pts) >= 2
@@ -618,7 +634,8 @@ def stabilize_video(input: str | Path, output: str | Path, opts: StabilizeOption
         return out
 
     # Pass 2: corregir y re-encodificar.
-    border = cv2.BORDER_REPLICATE if opts.crop == "keep" else cv2.BORDER_CONSTANT
+    cv = _cv2()
+    border = cv.BORDER_REPLICATE if opts.crop == "keep" else cv.BORDER_CONSTANT
     dec = _decode_all(inp, w, h)
     audio_codec = _probe_audio_codec(inp) if probe["has_audio"] else None
     a_mode = "copy" if _audio_copy_ok(audio_codec, inp.suffix) else "aac"
@@ -643,9 +660,9 @@ def stabilize_video(input: str | Path, output: str | Path, opts: StabilizeOption
                 break
             frame = np.frombuffer(raw, dtype=np.uint8).reshape(h, w, 3)
             if n_frames < len(warps):
-                frame = cv2.warpAffine(
+                frame = cv.warpAffine(
                     frame, warps[n_frames], (w, h),
-                    flags=cv2.INTER_LINEAR, borderMode=border,
+                    flags=cv.INTER_LINEAR, borderMode=border,
                 )
             enc.stdin.write(frame.tobytes())
             n_frames += 1

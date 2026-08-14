@@ -30,6 +30,14 @@ W, H, FPS, DUR = 180, 320, 30, 3.0
 BG_VAL, PERSON_VAL = 100, 230
 
 
+@pytest.fixture(autouse=True)
+def _synthetic_fallback(monkeypatch):
+    """Fuerza diff-borde y sin LaMa: el cuadrado sintético no es 'person'
+    para DeepLabV3 y así los tests son idénticos con o sin torch/LaMa."""
+    monkeypatch.setattr(vt, "_HAS_TORCH", False)
+    monkeypatch.setattr(vt, "_lama_available", lambda: False)
+
+
 def make_frames(static=False):
     total = int(round(DUR * FPS))
     bg = np.full((H, W, 3), BG_VAL, dtype=np.uint8)
@@ -196,6 +204,14 @@ class TestErasePaste:
         m = np.zeros((H, W), dtype=bool)
         m[100:160, 50:130] = True
         assert vt._shift_slices((H, W), m, dy=0, dx=-500) is None
+
+    def test_shift_slices_empty_mask(self):
+        # persona no detectada: no debe explotar (ys.min() sobre vacío)
+        m = np.zeros((H, W), dtype=bool)
+        assert vt._shift_slices((H, W), m, dy=5, dx=5) is None
+        out = np.zeros((H, W, 3), dtype=np.uint8)
+        vt.paste_person(out, out.copy(), m, 5, 5)  # no-op sin error
+        vt.paste_white(out, m, 5, 5)
 
 
 class TestPersonMask:
