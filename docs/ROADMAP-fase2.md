@@ -107,7 +107,7 @@ pesada diferida); la decisión #11 (de-plosive/dehum en Track 5) queda cerrada.
 - **B. Real-world EJECUTADO con 15 clips reales de Antonio (media/, decisión #3
   resuelta)**: `python .auto/v2/benchmark.py --suite real --real-dir media` →
   `.auto/v2/reports/real.md` (5 modelos × 15 clips, LRU cache de outputs).
-  Hallazgos: DF3 deja test_pc4_martina (susurro) casi en silencio (TP -80 dB);
+  Hallazgos: DF3 deja test_pc4_susurro (susurro) casi en silencio (TP -80 dB);
   DF2+master lleva todo a LUFS -13/-16 con TP -1.0; speech_ratio 0.35-0.92.
 - Entregable: `.auto/v2/reports/{synthetic,real}.md`, **nunca fusionados**.
 

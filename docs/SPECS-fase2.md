@@ -474,7 +474,7 @@ Research metrics (→ benchmark track 6, nunca en el score de producto)
 
 ## Track 6 — Benchmark `.auto` v2 *(sintético y real SEPARADOS)*
 
-**Estado: hecho (fase 2).** `.auto/v2/`: `build_synthetic.py` + `benchmark.py --suite synthetic|real` → `.auto/v2/reports/{synthetic,real}.md` (nunca fusionados). Synthetic: DF2 pesq 3.07 / DF3 2.98 / dpdfnet 2.71. **Real: 15 clips de `media/` ejecutados** (DF3 degrada test_pc4_martina a casi silencio; master lleva todo a -13/-16 LUFS TP -1.0).
+**Estado: hecho (fase 2).** `.auto/v2/`: `build_synthetic.py` + `benchmark.py --suite synthetic|real` → `.auto/v2/reports/{synthetic,real}.md` (nunca fusionados). Synthetic: DF2 pesq 3.07 / DF3 2.98 / dpdfnet 2.71. **Real: 15 clips de `media/` ejecutados** (DF3 degrada test_pc4_susurro a casi silencio; master lleva todo a -13/-16 LUFS TP -1.0).
 
 No mezclar "clean artificial + degradación artificial" con audio real como si fueran equivalentes. Dos suites independientes, dos reportes.
 

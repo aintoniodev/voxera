@@ -6,8 +6,8 @@ as base64 MP3 so the single HTML works without the server: open in any
 browser, listen with A/B buttons, vote (blind, side order randomized per
 listener), download one CSV with all votes.
 
-Pick criteria (from Antonio's round-1 votes): clips where the master clearly
-helped (martina, pc5_conversacion, metros) + clips where DF2 won (chorros,
+Pick criteria (from oyente1's round-1 votes): clips where the master clearly
+helped (susurro, pc5_conversacion, metros) + clips where DF2 won (chorros,
 grito) — the discriminating set for the >=60% decision.
 
 Output: .auto/human/voxera-test-AB-dificiles.html (~2-3 MB)
@@ -27,7 +27,7 @@ sys.path.insert(0, str(ROOT / "src"))
 COND = ROOT / ".auto" / "human" / "conditions"
 
 CLIPS = [
-    "test_pc4_martina",      # susurro: DF2 MOS 1 vs C MOS 3 (C gana fuerte)
+    "test_pc4_susurro",      # susurro: DF2 MOS 1 vs C MOS 3 (C gana fuerte)
     "test_pc5_conversacion", # conversacion baja: DF2 MOS 1 vs C MOS 3 (C gana fuerte)
     "test_metros",           # ruido de metro: C gano (MOS 3/3)
     "test_chorros",          # agua de fondo: B (DF2) gano (caso adverso)
