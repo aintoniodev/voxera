@@ -12,6 +12,11 @@ conocimiento en el repo para que viaje con el proyecto.
 | [voxera-audio-lowpass.md](voxera-audio-lowpass.md) | `src/voxera/audio_lowpass.py` | Efecto "Pase Bajo" (cutoff 800 Hz + rampas S), decisión de auto-aplicación por intención narrativa, verificación numérica (bit-exacto, bandas, método ratio) |
 | [voxera-teleport.md](voxera-teleport.md) | `src/voxera/video_teleport.py` | Efecto "Teletransportación" (silueta blanca 2-2-2 como transición), segmentación de persona DeepLabV3, verificación numérica por fases |
 | [voxera-cutsilence.md](voxera-cutsilence.md) | `src/voxera/video_silence.py` | Eliminación automática de silencios en vídeo (jump-cuts estilo TikTok), sync A/V frame-accurate (select/aselect + setpts), verificación numérica (frames exactos, sync < 20 ms) |
+| [voxera-video-stabilize.md](voxera-video-stabilize.md) | `src/voxera/video_stabilize.py` | Estabilización anti-temblor (Warp Stabilizer Smooth Motion), álgebra de similitudes W_t = D_t⁻¹·C_t, verificación con phase correlation |
+
+Todas incluyen una sección **Reference Implementation** con el código
+núcleo (expresiones ffmpeg exactas, easing, máscaras, álgebra) para que
+un agente autónomo pueda replicar el efecto sin acceso al módulo fuente.
 
 Nota: las referencias a ficheros de `tmp/` (capturas de TikTok, scripts de
 análisis) son artefactos locales — `tmp/` está gitignored.

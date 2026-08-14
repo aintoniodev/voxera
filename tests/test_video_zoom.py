@@ -163,7 +163,9 @@ class TestZCurve:
 class TestFilter:
     def test_filter_chain(self):
         vf = vz.build_zoom_filter(1080, 1920, 55.5, vz.ZoomOptions())
-        assert vf.startswith("scale=2160:3840:flags=lanczos,zoompan=")
+        # fps= primero: normaliza VFR -> CFR para que los timestamps del
+        # zoompan cuadren con la duración real del input
+        assert vf.startswith("fps=30,scale=2160:3840:flags=lanczos,zoompan=")
         assert "zoompan=z='" in vf and "d=1:fps=30:s=2160x3840" in vf
         assert vf.endswith("scale=1080:1920:flags=lanczos,setsar=1,format=yuv420p")
         assert "(iw-iw/zoom)*0.500000" in vf  # ancla centrada

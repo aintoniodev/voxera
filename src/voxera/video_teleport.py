@@ -261,6 +261,8 @@ def erase_person(frame: np.ndarray, mask: np.ndarray, plate: np.ndarray) -> np.n
 
 def _shift_slices(shape: tuple[int, int], mask: np.ndarray, dy: int, dx: int):
     """Slices (src, dst) para pegar `mask` desplazada (dy, dx); None si sale toda."""
+    if not mask.any():
+        return None
     H, W = shape
     ys, xs = np.where(mask)
     y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1

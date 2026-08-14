@@ -33,3 +33,65 @@ Aplicar lupas programáticas a vídeos (voxera video magnify), editar src/voxera
 2. E2E numérico: senoide 8 px + zoom 2 -> dentro periodo 8·zoom_eff ± 1 px, fuera 8 px, aro en el radio (perfil radial), diff fuera < 3; amplitud interior >= 90% de la fuente (calidad).
 3. Movimiento: centro del aro por score circular en frames clave — paper scan 2x2 (6 s): (235,319) -> (485,319) -> (235,959); tutorial voice (segmento 21-31 s): (235,319) -> (485,319) tras el momento de voz en t=2.76 s del segmento.
 4. Demos: media/videos/magnified/paper_magnify_motion.mp4 (barrido) y tutorial_magnify_voice.mp4 (voz) — diff fuera de la lente 0.52 (paper) en ambas.
+
+## Reference Implementation (código núcleo)
+
+La lente es un pipeline 100% YUV (sin conversiones RGB): ventana que sigue a la lente → crop local → scale lanczos → overlay del patch → maskedmerge(disco) → maskedmerge(aro) → overlay de vuelta. Las piezas que no se pueden inventar: la geometría (con redondeos), las máscaras PNG y la expresión de movimiento con ifs anidados.
+
+```python
+import numpy as np
+
+def lens_geometry(width: int, height: int, size=0.35, zoom=3.0, feather=0.05,
+                  ring_width=0.025) -> dict:
+    """Radio, ventana, lado del crop local y zoom efectivo tras redondeos."""
+    radius = max(int(round(size * min(width, height))), 4)
+    feather_px = feather * radius
+    win = max(int(2 * radius + 2 * feather_px + 8) // 2 * 2, 2 * radius)  # par
+    crop = max(int(2.0 * radius / zoom) // 2 * 2, 4)
+    return {"radius": radius, "win": win, "crop": crop,
+            "zoom_eff": 2.0 * radius / crop, "feather_px": feather_px,
+            "ring_px": max(1.0, ring_width * radius)}
+# Restricción: win < min(w,h) — la lente no cabe en frames pequeños.
+
+def build_lens_masks(radius: int, feather: float, ring_width: float, win: int):
+    """Máscaras del disco (pluma lineal) y del aro (antialias ~1px) como gris."""
+    y, x = np.mgrid[0:win, 0:win]
+    d = np.hypot(x - win / 2 + 0.5, y - win / 2 + 0.5)
+    a_disc = np.clip((radius - d) / max(feather * radius, 0.01), 0.0, 1.0)
+    disc = (a_disc * 255).astype(np.uint8)          # PNG gris, guardar con zlib
+    w = max(ring_width * radius, 0.5)
+    a_ring = np.clip(np.minimum(1.0, w / 2 + 1.0 - np.abs(d - radius)), 0.0, 1.0)
+    ring = (a_ring * 255).astype(np.uint8)
+    return disc, ring
+```
+
+```python
+# --- expresión ffmpeg del centro de la lente: ifs anidados por segmento ---
+# plan = [(T0,D0,P0), (T1,D1,P1), ...] — P_i = posición destino (px)
+# expr: if(t<S0, P0, if(t<E0, ease(P0->P1), if(t<S1, P1, if(t<E1, ... Pn))))
+# ease = p^a/(p^a+(1-p)^a) con a=1+62/25=3.48; p = clamp01((t-Si)/Di)
+# crop y overlay usan la MISMA expresión (mismo 't' -> mismo frame);
+# redondeo 2*floor(v/2) para alineación de croma 4:2:0.
+# TRAS -ss, 't' NO se reinicia (ffmpeg 7.1): restar opts.start -> tvar = (t-start)
+```
+
+```python
+# --- build_magnify_filter: esqueleto exacto del graph (entradas: [0] vídeo,
+#     [1] disco.png, [2] aro.png) ---
+# x_expr, y_expr = posición del borde de la ventana (ver _axis_expr: centro - win/2)
+# ploc = (win - 2r) // 2            # patch centrado en la ventana
+# cloc = (win - crop) / 2.0         # crop local centrado
+# sharp = ",unsharp=5:5:0.5:5:5:0.0" si --sharpen
+# [0:v]split=2[bg][src];
+# [src]crop=W:W:x='X':y='Y'[wn];                    # ventana sigue a la lente
+# [wn]split=3[wb][wm][wq];
+# [wm]crop=c:c:cloc:cloc,scale=2r:2r:flags=lanczos,setsar=1[+sharp][pch];
+# [1:v]format=yuv420p[dsc];  [2:v]format=yuv420p[rgm];
+# [wb][pch]overlay=x=ploc:y=ploc[pps];
+# [wq][pps][dsc]maskedmerge[mgd];                   # blend por luma del disco
+# color=c=white:s=WxW:r=FPS:d=DUR[wht];             # OJO: sin :d -> cuelga (EOF nunca)
+# [mgd][wht][rgm]maskedmerge[fin];                  # aro
+# [bg][fin]overlay=x='X':y='Y',format=yuv420p[vout]
+```
+
+Verificación de réplica: senoide 8 px + zoom 2 → periodo interior = base·zoom_eff (±1 px), exterior intacto, diff fuera de la lente < 3; la amplitud interior ≥ 90% de la fuente. El centro REAL difiere del pedido: `centro_efectivo = clamp_par(centro - win/2) + win/2`.
