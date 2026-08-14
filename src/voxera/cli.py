@@ -32,6 +32,7 @@ from voxera import video_zoom
 from voxera import video_teleport
 from voxera import video_magnify
 from voxera import video_silence
+from voxera import video_stabilize
 from voxera import audio_lowpass
 
 PROG = "voxera"
@@ -618,6 +619,58 @@ def build_parser() -> argparse.ArgumentParser:
     vcuts.add_argument(
         "--dry-run", action="store_true",
         help="imprimir el plan y salir sin escribir nada",
+    )
+
+    vstab = vsub.add_parser(
+        "stabilize",
+        help="estabilización de vídeo: quita el temblor de mano (anti-shake, "
+        "como el Warp Stabilizer en Smooth Motion)",
+        description="Elimina el temblor de cámara de vídeos handheld: features "
+        "Shi-Tomasi + Lucas-Kanade + RANSAC estiman el movimiento frame a frame, "
+        "la trayectoria acumulada se suaviza con un gaussiano (--smoothing) y cada "
+        "frame se corrige con un warp; el recorte se cubre con un zoom adaptativo "
+        "mínimo (--crop keep) o dejando bordes negros (--crop black). 100%% "
+        "OpenCV + ffmpeg, sin GPU, sin Premiere. Ya estable -> copia directa.",
+    )
+    vstab.add_argument("input", help="vídeo de entrada (handheld/tembloroso)")
+    vstab.add_argument("-o", "--output", required=True, help="salida .mp4")
+    vstab.add_argument(
+        "--smoothing", type=float, default=video_stabilize.DEFAULT_SMOOTHING,
+        help=f"sigma del gaussiano sobre la trayectoria en frames (default "
+        f"{video_stabilize.DEFAULT_SMOOTHING:g} ≈ 0.5 s a 30 fps; más = más "
+        f"pegado pero más lag en paneos; 0 = sin suavizado)",
+    )
+    vstab.add_argument(
+        "--max-shift", type=float, default=None,
+        help=f"máx. movimiento por frame en px (default: auto = 5%% de min(w,h) "
+        f"— los paneos rápidos/cortes se congelan, no se estabilizan)",
+    )
+    vstab.add_argument(
+        "--max-angle", type=float, default=video_stabilize.DEFAULT_MAX_ANGLE,
+        help=f"máx. rotación por frame en grados (default "
+        f"{video_stabilize.DEFAULT_MAX_ANGLE:g}; 0 = sin límite)",
+    )
+    vstab.add_argument(
+        "--crop", choices=("keep", "black"), default="keep",
+        help="keep (default): zoom adaptativo mínimo que cubre los bordes "
+        "(capado a --max-zoom) | black: bordes negros a la vista (inspección)",
+    )
+    vstab.add_argument(
+        "--max-zoom", type=float, default=video_stabilize.DEFAULT_MAX_ZOOM,
+        help=f"capa del zoom adaptativo en veces (default "
+        f"{video_stabilize.DEFAULT_MAX_ZOOM:g}; más = aguanta más temblor "
+        f"recortando más)",
+    )
+    vstab.add_argument(
+        "--crf", type=int, default=18,
+        help="x264 CRF (default 18; más alto = fichero más pequeño)",
+    )
+    vstab.add_argument(
+        "--audio-bitrate", default="192k", help="AAC bitrate (default 192k)",
+    )
+    vstab.add_argument(
+        "--dry-run", action="store_true",
+        help="imprimir el plan (con la métrica de temblor) y salir sin escribir nada",
     )
 
     # --- audio --------------------------------------------------------------
@@ -1220,6 +1273,27 @@ def _cmd_video(args) -> int:
                 print(video_silence.build_plan(args.input, opts))
                 return 0
             out = video_silence.cutsilence_video(args.input, args.output, opts)
+        except EnhancementError as exc:
+            print(f"{PROG}: error: {exc}", file=sys.stderr)
+            return 1
+        print(f"✓ {out}")
+        return 0
+
+    if args.video_command == "stabilize":
+        opts = video_stabilize.StabilizeOptions(
+            smoothing=args.smoothing,
+            max_shift=args.max_shift,
+            max_angle=args.max_angle,
+            crop=args.crop,
+            max_zoom=args.max_zoom,
+            crf=args.crf,
+            audio_bitrate=args.audio_bitrate,
+        )
+        try:
+            if args.dry_run:
+                print(video_stabilize.build_plan(args.input, opts))
+                return 0
+            out = video_stabilize.stabilize_video(args.input, args.output, opts)
         except EnhancementError as exc:
             print(f"{PROG}: error: {exc}", file=sys.stderr)
             return 1

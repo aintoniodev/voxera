@@ -78,6 +78,7 @@ curl -L --fail -o models/video/RealESRGAN_x4plus.pth https://github.com/xinntao/
 .venv-video/Scripts/voxera video teleport in.mp4 -o out.mp4 --time 36 --remove         # teletransportación: silueta blanca 2-2-2 + desaparición (cámara fija)
 .venv-video/Scripts/voxera video teleport in.mp4 -o out.mp4 --time 36                  # solo el parpadeo de silueta (transición entre tomas)
 .venv-video/Scripts/voxera video magnify in.mp4 -o out.mp4 --center 0.5,0.4           # lente Magnify (ffmpeg, sin GPU)
+.venv-video/Scripts/voxera video stabilize in.mp4 -o out.mp4                     # anti-temblor de mano (OpenCV+ffmpeg, sin GPU)
 .venv-ims/Scripts/voxera audio lowpass in.wav -o out.wav --start 4 --end 12           # efecto Pase Bajo (numpy/scipy)
 ```
 
@@ -234,6 +235,46 @@ cortan). 100 % ffmpeg — sin Premiere, sin edición manual.
   sync A/V < 20 ms, sin voz → error (exit 1), sin silencios → copia directa.
 - Demo real: `media/demo-video.mp4` (40.6 s de voz) → `--level medium`
   elimina 8.15 s (5 cortes); verificado numéricamente (frames exactos).
+
+### Estabilización de vídeo (anti-temblor, sin Premiere)
+
+Quita el temblor de cámara de vídeos grabados a mano (handheld), como el
+Warp Stabilizer de Premiere en modo *Smooth Motion*: estima el movimiento
+frame a frame (features Shi-Tomasi + Lucas-Kanade + RANSAC), suaviza la
+trayectoria acumulada con un gaussiano y corrige cada frame con un warp.
+100 % OpenCV + ffmpeg — sin GPU, sin Premiere. Vídeo ya estable → copia
+directa.
+
+```bash
+.venv-video/Scripts/voxera video stabilize in.mp4 -o out.mp4
+
+# más pegado (más recorte), o bordes negros a la vista (inspección)
+.venv-video/Scripts/voxera video stabilize in.mp4 -o out.mp4 --smoothing 30
+.venv-video/Scripts/voxera video stabilize in.mp4 -o out.mp4 --crop black
+
+# plan con la métrica de temblor (antes → después), sin escribir nada
+.venv-video/Scripts/voxera video stabilize in.mp4 -o out.mp4 --dry-run
+```
+
+- `--smoothing SIGMA` — sigma del gaussiano sobre la trayectoria, en
+  frames (default 15 ≈ 0.5 s a 30 fps; más = más pegado pero más lag en
+  paneos; 0 = sin suavizado).
+- `--max-shift PX` / `--max-angle DEG` — guardas: los paneos rápidos y
+  cortes de escena no se estabilizan, se congelan (default: shift auto =
+  5 % de min(w,h); ángulo 1.5°).
+- `--crop keep|black` — keep (default): zoom adaptativo **mínimo** que
+  cubre los bordes que asoman (capado a `--max-zoom` 1.2); black: bordes
+  negros a la vista (útil para ver qué hace el estabilizador).
+- Cómo funciona: pass 1 estima el temblor (a resolución ≤ 640 px) y
+  calcula la trayectoria acumulada C_t → suavizado D_t → corrección
+  W_t = D_t⁻¹·C_t → zoom; pass 2 corrige frame a frame y re-encoda
+  (libx264 CRF 18, misma resolución/fps → **duración sin cambios**); el
+  audio original se remuxea (copiado bit-exacto si el códec lo permite,
+  si no AAC 192k). Determinista: mismo input → mismo output byte a byte.
+- Verificado: temblor medido con phase correlation (ajeno al módulo)
+  cae ≥ 50 % (en la práctica ~90 % en el sintético: 2.4 px → 0.3 px
+  medianos), duración/fps/audio preservados, estático → copia directa
+  bit-exacta, 44 tests.
 
 ### Skills del agente (conocimiento procedural)
 
