@@ -29,10 +29,11 @@ DECISIÓN DE AUTO-APLICACIÓN (cuándo aplicar sin --start/--end a mano):
 - Intención ambigua o material que no encaja → preguntar al usuario antes de decidir.
 NOTA: ningún criterio de audio deduce una acción visual (ponerse auriculares); cuando el momento lo define el vídeo, el agente debe pedir el timestamp o proponer el detector de oscuridad como aproximación.
 ## Procedure
-1. Comando: `.venv-ims/Scripts/voxera audio lowpass IN -o OUT [--cutoff 800] [--start S] [--end E] [--transition 1] [--curve 62] [--easing smooth|out|in|linear] [--order 1|2|4] [--dry-run]`
+1. Comando: `.venv-ims/Scripts/voxera audio lowpass IN -o OUT [--cutoff 800] [--start S] [--end E] [--transition 1] [--curve 62] [--easing smooth|out|in|linear] [--order 1|2|4] [--resonance Q] [--occlusion dB] [--shelf Hz] [--dry-run]`
 2. Defaults medidos del tutorial (2026-08-13, audio del TikTok de @serri.mp4 extraído vía CDP + whisper + espectro): cutoff 800 Hz declarado ('ajustaremos el valor a 800 hercios'), transición predeterminada de Premiere (Constant Power, 1 s) en los cortes, pendiente ~12 dB/oct (2º orden). La rampa medida en el audio real es ~0.5-1.5 s (envolvente 4-10 kHz con mediana 1 s para quitar sibilantes de la voz).
 3. Semántica de región (derivada de qué bordes se dan, y las rampas van SOLO en los bordes explícitos): sin --start/--end = todo el clip con rampa en ambos bordes (el clip ya cortado del tutorial); con ambos = 'blip' (el caso del tutorial: rampa de entrada, mantener, rampa de salida); solo --start = 'on' (entra y se queda — sin rampa de salida al final del archivo); solo --end = 'off' (empieza filtrado — sin rampa de entrada en t=0).
 4. Motor: wet = scipy butter(order, cutoff) con sosfilt sobre TODO el clip; out = dry + (wet - dry) * env (crossfade seco/húmedo). Fuera de la región env=0 → salida bit-exacta al original. Envolvente con rampas S (ease p^a/(p^a+(1-p)^a), a=1+curve/25, misma convención que voxera video zoom); si la región es más corta que 2*transition las rampas se cruzan con min() (pico < 1, sin sobresaltos).
+4b. Matices "orejas tapadas" (opcionales, defaults = comportamiento original bit-idéntico): un LPF limpio suena a "radio lejana", no a oído tapado. (a) `--resonance Q` 0.5-2.0: biquad RBJ en vez de butter; Q=0.707 == Butterworth (1/sqrt(2)); Q>0.707 => pico en el cutoff (|H(f0)|=Q, +1.58 dB con Q=1.2) — carácter "de caja"/"bajo el agua"; solo con order 2 o 4 (order 4 = cascada de 2 biquads, ~24 dB/oct con pico duplicado). (b) `--occlusion dB` 0-12 con `--shelf Hz` (default 250): low-shelf RBJ S=1 sobre el húmedo — el "efecto de oclusión": al taparse las orejas la conducción ósea refuerza ~100-500 Hz (por eso la voz propia suena "bombona"). El shelf añade ganancia: con occlusion>0 la salida se clipea a [-1,1] SOLO dentro de la región (fuera sigue bit-exacto).
 5. Verificar SIEMPRE numéricamente: bit-exactitud fuera de la región (np.array_equal), caída de banda aguda dentro (butter2@800 → ~-28 dB @ 3-9 kHz; -26 dB umbral test), bajo preservado (< 1.5 dB), y forma de rampa con el MÉTODO RATIO (env_out/env_in sigue 1-ease) — la correlación directa sobre material con voz da ~0.5 por los sibilantes; con ratio da 0.999.
 ## Pitfalls
 - build_envelope DEBE ser vectorizado (np.minimum + ease vectorizada, float32): la versión con loop Python por muestra tardaba 25.8 s y 623 MB para un clip de 3 min; la vectorizada 1.4 s. ease() acepta array (float32 in → float32 out) y devuelve float para escalar.
@@ -44,7 +45,7 @@ NOTA: ningún criterio de audio deduce una acción visual (ponerse auriculares);
 - Los tutoriales de @serri.mp4 se descargan vía CDP Network capture (anti-bot TikTok): el script local (tmp/tt_capture.mjs, gitignored) + skill web-browser (Chrome :9222); yt-dlp directo falla con 'Unexpected response from webpage request'.
 - TikTok: la transcripción con faster-whisper 'small' + vad_filter en es da 1.00 confianza — la receta del tutorial salió de ahí (no hay texto OCR-able en los frames, 1080x1920).
 ## Verification
-1. tests: `.venv-ims/Scripts/python.exe -m pytest tests/test_audio_lowpass.py -q` (32 tests: ease escalar+vectorizada, opciones, envolvente full/blip/on/off, región fuera de archivo, atenuación por orden, plan, e2e bit-exacto + rampa S).
+1. tests: `.venv-ims/Scripts/python.exe -m pytest tests/test_audio_lowpass.py -q` (46 tests: ease escalar+vectorizada, opciones + validación resonance/occlusion/shelf, envolvente full/blip/on/off, región fuera de archivo, atenuación por orden, pico Q en cutoff (|H(f0)|=Q), shelf oclusión (+6 dB @ 100 Hz, 0 dB @ 5 kHz), bit-igualdad de defaults, clip guard, plan, e2e bit-exacto + rampa S).
 2. Demo real: `media/audio/lowpass/demo_blip.wav` (blip 4-12 s sobre el audio del tutorial de zoom) — verificado bit-exacto fuera, -27.8 dB en 3-9 kHz dentro (teoría butter2@800: -28 dB), bajo -0.1 dB, rampas ratio corr 0.999.
 2b. Demo combinado voz+zoom: `media/videos/zoomed/long1_growzoom_lowpass.mp4` — growzoom de long1 con dos frases filtradas (30.1-35.6 y 38.2-43.4 s, transition 0.5 s) coincidiendo con pulsos de zoom (t=30.76 y 38.63 s, env=0.998 en el pulso); verificado bit-exacto fuera y -26 dB en 3-9 kHz dentro. Dos blips = aplicar el CLI dos veces encadenadas (regiones disjuntas, crossfade lineal → idéntico al resultado directo).
 3. Detector de oscuridad (si se usa para replicar): sobre el audio capturado del tutorial de lowpass encuentra las regiones reales ±0.4 s; sobre material limpio (audio del tutorial de zoom) NO — esperar falsos positivos y filtrar por contexto.
@@ -57,6 +58,38 @@ El efecto completo es reproducible en ~40 líneas: filtro Butterworth + crossfad
 ```python
 import numpy as np
 from scipy.signal import butter, sosfilt
+
+Q_BUTTERWORTH = 0.7071067811865476  # 1/sqrt(2): biquad RBJ == Butterworth 2º
+
+
+def rbj_lowpass_sos(cutoff: float, sr: int, q: float) -> np.ndarray:
+    """Biquad low-pass RBJ (Audio EQ Cookbook). Q=0.707 == Butterworth 2º;
+    Q>0.707 => pico en el cutoff (|H(f0)|=Q): carácter 'de caja'/'orejas tapadas'."""
+    w0 = 2.0 * np.pi * cutoff / sr
+    alpha = np.sin(w0) / (2.0 * q)
+    c = np.cos(w0)
+    b0 = (1.0 - c) / 2.0
+    a0 = 1.0 + alpha
+    return np.array([[b0 / a0, (1.0 - c) / a0, b0 / a0, 1.0, -2.0 * c / a0, (1.0 - alpha) / a0]])
+
+
+def rbj_lowshelf_sos(db: float, f0: float, sr: int) -> np.ndarray | None:
+    """Low-shelf RBJ S=1: refuerza los graves bajo f0 (efecto de oclusión:
+    conducción ósea ~100-500 Hz al taparse las orejas). db=0 => None (skip)."""
+    if db == 0.0:
+        return None
+    a = 10.0 ** (db / 40.0)
+    w0 = 2.0 * np.pi * f0 / sr
+    alpha = np.sin(w0) / 2.0 * np.sqrt(2.0)  # S=1
+    c = np.cos(w0); s = np.sqrt(a)
+    b0 = a * ((a + 1.0) - (a - 1.0) * c + 2.0 * s * alpha)
+    b1 = 2.0 * a * ((a - 1.0) - (a + 1.0) * c)
+    b2 = a * ((a + 1.0) - (a - 1.0) * c - 2.0 * s * alpha)
+    a0 = (a + 1.0) + (a - 1.0) * c + 2.0 * s * alpha
+    a1 = -2.0 * ((a - 1.0) + (a + 1.0) * c)
+    a2 = (a + 1.0) + (a - 1.0) * c - 2.0 * s * alpha
+    return np.array([[b0 / a0, b1 / a0, b2 / a0, 1.0, a1 / a0, a2 / a0]])
+
 
 def ease(p, curve: float = 62.0, easing: str = "smooth"):
     """Vectorizada: acepta escalar o array float32. Misma curva que voxera video zoom."""
@@ -99,13 +132,29 @@ def build_envelope(n: int, sr: int, start, end, transition=1.0, curve=62.0,
     env[t > b] = 0.0
     return env
 
-def apply_lowpass(samples: np.ndarray, sr: int, cutoff=800.0, order=2, **env_kw) -> np.ndarray:
-    """out = dry + (wet - dry) * env. Fuera de la región: bit-exacto."""
+def apply_lowpass(samples: np.ndarray, sr: int, cutoff=800.0, order=2,
+                  resonance=None, occlusion=0.0, shelf=250.0, **env_kw) -> np.ndarray:
+    """out = dry + (wet - dry) * env. Fuera de la región: bit-exacto.
+    resonance=None => butter (legado bit-igual); si no, biquad RBJ con Q
+    (order 4 = cascada de 2). occlusion>0 => low-shelf sobre el húmedo y
+    clip a [-1,1] SOLO dentro de la región (el shelf añade ganancia)."""
     dry = np.asarray(samples, dtype=np.float32).reshape(-1)
-    sos = butter(order, cutoff, btype="lowpass", fs=sr, output="sos")
+    if resonance is None:
+        sos = butter(order, cutoff, btype="lowpass", fs=sr, output="sos")
+    else:
+        sos = rbj_lowpass_sos(cutoff, sr, resonance)
+        if order == 4:
+            sos = np.vstack([sos, sos])
     wet = np.asarray(sosfilt(sos, dry), dtype=np.float32)
+    if occlusion > 0.0:
+        sh = rbj_lowshelf_sos(occlusion, shelf, sr)
+        wet = np.asarray(sosfilt(sh, wet), dtype=np.float32)
     env = build_envelope(len(dry), sr, **env_kw)
-    return dry + (wet - dry) * env
+    out = dry + (wet - dry) * env
+    if occlusion > 0.0:
+        hot = env > 0.0
+        out[hot] = np.clip(out[hot], -1.0, 1.0)
+    return out
 ```
 
 Defaults medidos del tutorial (2026-08-13): cutoff 800 Hz, transition 1 s (Constant Power de Premiere), order 2 (pendiente ~12 dB/oct), curve 62. La verificación de la rampa usa el método RATIO (`env_out/env_in` sigue `1-ease`, corr 0.999) — la correlación directa sobre material con voz da ~0.5 por los sibilantes.

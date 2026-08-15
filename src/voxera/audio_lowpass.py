@@ -34,6 +34,15 @@ Curva de las rampas (misma convención que ``voxera video zoom``, el rango
   - in : arranca lento y acelera: p^(1+curve/50)
   - linear: sin curva
 curve=0 => siempre lineal, en cualquier easing.
+
+Matices "orejas tapadas" (opcionales; defaults = comportamiento original
+bit-idéntico): un LPF limpio suena a "radio lejana", no a oído tapado.
+  - --resonance (Q del biquad, default None = Butterworth actual): Q > 0.707
+    => pico en el cutoff, carácter "de caja"/"bajo el agua".
+  - --occlusion (dB, low-shelf @ --shelf, default 0 = off): el "efecto de
+    oclusión" — al taparse las orejas la conducción ósea refuerza
+    ~100-500 Hz; un LPF solo corta agudos, la oclusión añade el "bombo"
+    de graves característico.
 """
 
 from __future__ import annotations
@@ -51,6 +60,10 @@ DEFAULT_CUTOFF = 800.0    # "ajustaremos el valor a 800 hercios" (el tutorial)
 DEFAULT_TRANSITION = 1.0  # "transición predeterminada" de Premiere (Constant Power, 1 s)
 DEFAULT_CURVE = 62.0      # curva S del creador (60-65), misma que voxera video zoom
 DEFAULT_ORDER = 2         # pendiente ~12 dB/oct (medida en el tutorial)
+DEFAULT_RESONANCE = None  # None = Butterworth (bit-igual al efecto original)
+DEFAULT_OCCLUSION = 0.0   # dB, 0 = sin refuerzo de graves (bit-igual)
+DEFAULT_SHELF = 250.0     # Hz, centro del shelf de oclusión (efecto de oclusión)
+Q_BUTTERWORTH = 0.7071067811865476  # 1/sqrt(2): biquad RBJ == Butterworth 2º
 LP_EASINGS = ("smooth", "out", "in", "linear")
 LP_ORDERS = (1, 2, 4)
 
@@ -70,6 +83,9 @@ class LowPassOptions:
     curve: float = DEFAULT_CURVE
     easing: str = "smooth"
     order: int = DEFAULT_ORDER
+    resonance: float | None = DEFAULT_RESONANCE  # Q del LPF; None = Butterworth
+    occlusion: float = DEFAULT_OCCLUSION  # dB de refuerzo de graves (shelf)
+    shelf: float = DEFAULT_SHELF  # Hz, centro del shelf de oclusión
     start: float | None = None
     end: float | None = None
 
@@ -84,6 +100,23 @@ class LowPassOptions:
             raise EnhancementError(f"easing debe ser uno de {LP_EASINGS}, got {self.easing!r}")
         if self.order not in LP_ORDERS:
             raise EnhancementError(f"order debe ser uno de {LP_ORDERS}, got {self.order}")
+        if self.resonance is not None and not 0.5 <= self.resonance <= 2.0:
+            raise EnhancementError(
+                f"resonance debe estar en [0.5, 2.0] o ser None, got {self.resonance}"
+            )
+        if self.resonance is not None and self.order == 1:
+            raise EnhancementError(
+                "resonance solo tiene sentido con order 2 o 4 "
+                "(un filtro de 1er orden no tiene Q)"
+            )
+        if not 0 <= self.occlusion <= 12:
+            raise EnhancementError(
+                f"occlusion debe estar en [0, 12] dB, got {self.occlusion}"
+            )
+        if not 50 <= self.shelf <= 2000:
+            raise EnhancementError(
+                f"shelf debe estar en [50, 2000] Hz, got {self.shelf}"
+            )
         if self.start is not None and self.start < 0:
             raise EnhancementError(f"start debe ser >= 0, got {self.start}")
         if self.end is not None and self.end <= 0:
@@ -166,12 +199,71 @@ def build_envelope(n: int, sample_rate: int, opts: LowPassOptions) -> np.ndarray
     return env
 
 
+def _rbj_lowpass_sos(cutoff: float, sample_rate: int, q: float) -> np.ndarray:
+    """Biquad low-pass RBJ (Audio EQ Cookbook) con Q: una sección SOS.
+
+    Q = 0.7071 == Butterworth de 2º orden; Q > 0.707 => pico en el cutoff
+    (carácter "de caja"/"orejas tapadas"); Q < 0.707 => más amortiguado.
+    """
+    w0 = 2.0 * np.pi * cutoff / sample_rate
+    alpha = np.sin(w0) / (2.0 * q)
+    cos_w0 = np.cos(w0)
+    b0 = (1.0 - cos_w0) / 2.0
+    b1 = 1.0 - cos_w0
+    b2 = b0
+    a0 = 1.0 + alpha
+    a1 = -2.0 * cos_w0
+    a2 = 1.0 - alpha
+    return np.array(
+        [[b0 / a0, b1 / a0, b2 / a0, 1.0, a1 / a0, a2 / a0]], dtype=np.float64
+    )
+
+
+def _rbj_lowshelf_sos(db: float, f0: float, sample_rate: int) -> np.ndarray:
+    """Biquad low-shelf RBJ (S=1): refuerza los graves por debajo de ``f0``.
+
+    El "efecto de oclusión": al taparse las orejas, la conducción ósea
+    refuerza ~100-500 Hz (por eso la propia voz suena "bombona"). S=1 =
+    pendiente suave (~6 dB/oct en la transición del shelf).
+    """
+    if db == 0.0:
+        return None
+    a = 10.0 ** (db / 40.0)
+    w0 = 2.0 * np.pi * f0 / sample_rate
+    alpha = np.sin(w0) / 2.0 * np.sqrt(2.0)  # S=1
+    cos_w0 = np.cos(w0)
+    sq_a = np.sqrt(a)
+    b0 = a * ((a + 1.0) - (a - 1.0) * cos_w0 + 2.0 * sq_a * alpha)
+    b1 = 2.0 * a * ((a - 1.0) - (a + 1.0) * cos_w0)
+    b2 = a * ((a + 1.0) - (a - 1.0) * cos_w0 - 2.0 * sq_a * alpha)
+    a0 = (a + 1.0) + (a - 1.0) * cos_w0 + 2.0 * sq_a * alpha
+    a1 = -2.0 * ((a - 1.0) + (a + 1.0) * cos_w0)
+    a2 = (a + 1.0) + (a - 1.0) * cos_w0 - 2.0 * sq_a * alpha
+    return np.array(
+        [[b0 / a0, b1 / a0, b2 / a0, 1.0, a1 / a0, a2 / a0]], dtype=np.float64
+    )
+
+
+def _build_lp_sos(opts: LowPassOptions, sample_rate: int) -> np.ndarray:
+    """Secciones SOS del low-pass: Butterworth (default) o biquad RBJ con Q."""
+    if opts.resonance is None:
+        return butter(
+            opts.order, opts.cutoff, btype="lowpass", fs=sample_rate, output="sos"
+        )
+    sos = _rbj_lowpass_sos(opts.cutoff, sample_rate, opts.resonance)
+    if opts.order == 4:
+        sos = np.vstack([sos, sos])  # cascada: ~24 dB/oct con el pico duplicado
+    return sos
+
+
 def apply_lowpass(samples: np.ndarray, sample_rate: int, opts: LowPassOptions) -> np.ndarray:
     """Aplica el Pase Bajo: crossfade seco/húmedo con la envolvente.
 
     out = dry + (wet - dry) * env — fuera de la región la salida es
-    bit-exacta al original; dentro, el filtro Butterworth ``order`` con el
-    cutoff del tutorial.
+    bit-exacta al original; dentro, el filtro ``order`` con el cutoff del
+    tutorial. Con ``resonance`` (Q > 0.707) el LPF gana el pico "de caja";
+    con ``occlusion`` el húmedo recibe además un low-shelf de graves
+    (efecto de oclusión). Defaults = Butterworth sin shelf (bit-igual).
     """
     opts.validate()
     if opts.cutoff >= sample_rate / 2:
@@ -179,10 +271,19 @@ def apply_lowpass(samples: np.ndarray, sample_rate: int, opts: LowPassOptions) -
             f"cutoff ({opts.cutoff} Hz) debe ser < nyquist ({sample_rate / 2} Hz)"
         )
     dry = np.asarray(samples, dtype=np.float32).reshape(-1)
-    sos = butter(opts.order, opts.cutoff, btype="lowpass", fs=sample_rate, output="sos")
+    sos = _build_lp_sos(opts, sample_rate)
     wet = np.asarray(sosfilt(sos, dry), dtype=np.float32)
+    if opts.occlusion > 0.0:
+        shelf_sos = _rbj_lowshelf_sos(opts.occlusion, opts.shelf, sample_rate)
+        wet = np.asarray(sosfilt(shelf_sos, wet), dtype=np.float32)
     env = build_envelope(len(dry), sample_rate, opts)
-    return dry + (wet - dry) * env
+    out = dry + (wet - dry) * env
+    if opts.occlusion > 0.0:
+        # el shelf añade ganancia: sin el guard, material caliente haría wrap.
+        # Solo dentro de la región filtrada — fuera, la salida sigue bit-exacta.
+        hot = env > 0.0
+        out[hot] = np.clip(out[hot], -1.0, 1.0)
+    return out
 
 
 def _check_region(duration: float, opts: LowPassOptions) -> None:
@@ -215,10 +316,19 @@ def build_plan(input: str | Path, opts: LowPassOptions) -> str:
         "full": "todo el clip, rampa en ambos bordes",
     }[mode]
     slope = {1: "6 dB/oct", 2: "12 dB/oct", 4: "24 dB/oct"}[opts.order]
+    if opts.resonance is None:
+        filtro = f"butter {opts.order}º ({slope}) lowpass @ {opts.cutoff:g} Hz"
+    else:
+        filtro = f"biquad RBJ Q={opts.resonance:g} ({slope}) lowpass @ {opts.cutoff:g} Hz"
+    if opts.occlusion > 0.0:
+        ocl = f"+{opts.occlusion:g} dB @ {opts.shelf:g} Hz (shelf S=1)"
+    else:
+        ocl = "off"
     lines = [
         "VOXERA PLAN (audio lowpass)",
         f"  entrada : {inp} ({sr} Hz, {dur:.2f} s)",
-        f"  filtro  : butter {opts.order}º ({slope}) lowpass @ {opts.cutoff:g} Hz",
+        f"  filtro  : {filtro}",
+        f"  oclusión: {ocl}",
         f"  región  : {a:.2f}s .. {b:.2f}s ({mode}: {mode_label})",
         f"  rampa   : {opts.transition:g} s por borde (curva {opts.curve:.0f}, "
         f"easing {opts.easing})",

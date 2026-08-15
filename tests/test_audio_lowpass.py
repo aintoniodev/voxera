@@ -66,6 +66,9 @@ class TestOptions:
         assert o.curve == 62.0
         assert o.easing == "smooth"
         assert o.order == 2
+        assert o.resonance is None
+        assert o.occlusion == 0.0
+        assert o.shelf == 250.0
 
     def test_bad_cutoff(self):
         for c in (10, 25000):
@@ -88,6 +91,25 @@ class TestOptions:
     def test_bad_order(self):
         with pytest.raises(EnhancementError):
             al.LowPassOptions(order=3).validate()
+
+    def test_bad_resonance(self):
+        for r in (0.4, 2.5):
+            with pytest.raises(EnhancementError):
+                al.LowPassOptions(resonance=r).validate()
+
+    def test_resonance_needs_order_2_or_4(self):
+        with pytest.raises(EnhancementError):
+            al.LowPassOptions(resonance=1.1, order=1).validate()
+
+    def test_bad_occlusion(self):
+        for db in (-1.0, 13.0):
+            with pytest.raises(EnhancementError):
+                al.LowPassOptions(occlusion=db).validate()
+
+    def test_bad_shelf(self):
+        for f in (30.0, 5000.0):
+            with pytest.raises(EnhancementError):
+                al.LowPassOptions(occlusion=3.0, shelf=f).validate()
 
     def test_bad_seg(self):
         with pytest.raises(EnhancementError):
@@ -192,6 +214,92 @@ class TestFilter:
         with pytest.raises(EnhancementError):
             al.apply_lowpass(np.zeros(100, np.float32), SR, al.LowPassOptions(cutoff=SR / 2))
 
+    @staticmethod
+    def _sine(freq, dur=5.0, peak=0.5):
+        t = np.arange(int(SR * dur), dtype=np.float64) / SR
+        return (peak * np.sin(2 * np.pi * freq * t)).astype(np.float32)
+
+    @staticmethod
+    def _steady_gain_db(x, y, tail=1.0):
+        n = int(SR * tail)
+        return 20 * np.log10(np.sqrt((y[-n:] ** 2).mean()) / (np.sqrt((x[-n:] ** 2).mean()) + 1e-12))
+
+    def test_resonance_peaks_at_cutoff(self):
+        # para el biquad RBJ, |H(f0)| == Q: Q>0.707 => ganancia > 0 dB en el cutoff
+        x = self._sine(800.0)
+        y = al.apply_lowpass(x, SR, al.LowPassOptions(transition=0.0, resonance=1.2))
+        assert self._steady_gain_db(x, y) == pytest.approx(20 * np.log10(1.2), abs=0.4)
+
+    def test_butterworth_gain_at_cutoff(self):
+        # Butterworth (default): -3 dB exactos en el cutoff
+        x = self._sine(800.0)
+        y = al.apply_lowpass(x, SR, al.LowPassOptions(transition=0.0))
+        assert self._steady_gain_db(x, y) == pytest.approx(-3.0, abs=0.4)
+
+    def test_resonance_q_butterworth_matches_default(self):
+        # Q=0.707 == Butterworth: misma respuesta (no bit-igual; el path None
+        # es el legado bit-igual, este es el biquad RBJ numéricamente cercano)
+        rng = np.random.default_rng(0)
+        x = rng.standard_normal(int(SR * 3)).astype(np.float32)
+        a = al.apply_lowpass(x, SR, al.LowPassOptions(transition=0.0))
+        b = al.apply_lowpass(x, SR, al.LowPassOptions(transition=0.0, resonance=al.Q_BUTTERWORTH))
+        assert np.allclose(a, b, atol=1e-3)
+
+    def test_resonance_order4_cascades(self):
+        # order 4 + resonance: pendiente ~24 dB/oct en la banda aguda
+        rng = np.random.default_rng(1)
+        x = rng.standard_normal(int(SR * 4)).astype(np.float32)
+        out = al.apply_lowpass(x, SR, al.LowPassOptions(order=4, resonance=1.1, transition=0.0))
+        hi_in = _band_rms(x, SR, 3000, 8000).mean()
+        hi_out = _band_rms(out, SR, 3000, 8000).mean()
+        drop = 20 * np.log10(hi_out / (hi_in + 1e-12))
+        assert drop < -40, f"measured {drop:.1f} dB"
+
+    def test_occlusion_shelf_boosts_lows_only(self):
+        # shelf +6 dB @ 250 Hz (S=1): 100 Hz sube ~6 dB, 5 kHz se queda
+        sos = al._rbj_lowshelf_sos(6.0, 250.0, SR)
+        from scipy.signal import sosfilt
+
+        x100 = self._sine(100.0)
+        y100 = sosfilt(sos, x100)
+        assert self._steady_gain_db(x100, y100) == pytest.approx(6.0, abs=0.4)
+        x5k = self._sine(5000.0)
+        y5k = sosfilt(sos, x5k)
+        assert self._steady_gain_db(x5k, y5k) == pytest.approx(0.0, abs=0.4)
+
+    def test_occlusion_zero_is_bit_identical(self):
+        rng = np.random.default_rng(2)
+        x = rng.standard_normal(int(SR * 3)).astype(np.float32)
+        a = al.apply_lowpass(x, SR, al.LowPassOptions(transition=0.0))
+        b = al.apply_lowpass(x, SR, al.LowPassOptions(transition=0.0, occlusion=0.0, shelf=250.0))
+        assert np.array_equal(a, b)
+
+    def test_occlusion_boosts_low_band_of_wet(self):
+        # integración: con oclusión, la banda grave del húmedo sube vs sin oclusión
+        rng = np.random.default_rng(3)
+        x = rng.standard_normal(int(SR * 4)).astype(np.float32)
+        base = al.apply_lowpass(x, SR, al.LowPassOptions(transition=0.0))
+        occ = al.apply_lowpass(x, SR, al.LowPassOptions(transition=0.0, occlusion=6.0))
+        lo_base = _band_rms(base, SR, 100, 400).mean()
+        lo_occ = _band_rms(occ, SR, 100, 400).mean()
+        assert 20 * np.log10(lo_occ / (lo_base + 1e-12)) > 3.0
+
+    def test_occlusion_clip_guard(self):
+        # material a full scale + oclusión fuerte: nunca sale de [-1, 1]
+        x = self._sine(100.0, dur=2.0, peak=0.95)
+        out = al.apply_lowpass(x, SR, al.LowPassOptions(transition=0.0, occlusion=12.0))
+        assert np.abs(out).max() <= 1.0
+
+    def test_region_outside_bit_exact_with_extras(self):
+        # con resonance+occlusion, fuera de la región sigue siendo bit-exacto
+        rng = np.random.default_rng(4)
+        x = (0.5 * rng.standard_normal(int(SR * 6))).astype(np.float32)
+        out = al.apply_lowpass(
+            x, SR, al.LowPassOptions(start=2.0, end=4.0, resonance=1.2, occlusion=6.0)
+        )
+        assert np.array_equal(out[: int(2.0 * SR)], x[: int(2.0 * SR)])
+        assert np.array_equal(out[int(4.0 * SR):], x[int(4.0 * SR):])
+
     @pytest.mark.parametrize("order,min_db", [(1, 12), (2, 26), (4, 50)])
     def test_high_band_attenuation(self, order, min_db):
         rng = np.random.default_rng(0)
@@ -219,6 +327,16 @@ class TestPlan:
         assert plan.startswith("VOXERA PLAN (audio lowpass)")
         assert "800" in plan and "blip" in plan
         assert "0.20s .. 0.80s" in plan
+        assert "oclusión: off" in plan
+
+    def test_plan_shows_extras(self, tmp_path):
+        wav = tmp_path / "in.wav"
+        sf.write(wav, s.sibilant(1.0), SR)
+        plan = al.build_plan(
+            wav, al.LowPassOptions(resonance=1.2, occlusion=6.0)
+        )
+        assert "Q=1.2" in plan
+        assert "+6 dB @ 250 Hz" in plan
 
     def test_plan_bad_opts_raises(self, tmp_path):
         wav = tmp_path / "in.wav"
