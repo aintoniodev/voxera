@@ -13,6 +13,7 @@ conocimiento en el repo para que viaje con el proyecto.
 | [voxera-teleport.md](voxera-teleport.md) | `src/voxera/video_teleport.py` | Efecto "Teletransportación" (silueta blanca 2-2-2 como transición), segmentación de persona DeepLabV3, verificación numérica por fases |
 | [voxera-cutsilence.md](voxera-cutsilence.md) | `src/voxera/video_silence.py` | Eliminación automática de silencios en vídeo (jump-cuts estilo TikTok), sync A/V frame-accurate (select/aselect + setpts), verificación numérica (frames exactos, sync < 20 ms) |
 | [voxera-video-stabilize.md](voxera-video-stabilize.md) | `src/voxera/video_stabilize.py` | Estabilización anti-temblor (Warp Stabilizer Smooth Motion), álgebra de similitudes W_t = D_t⁻¹·C_t, verificación con phase correlation |
+| [voxera-audio-tonal.md](voxera-audio-tonal.md) | `src/voxera/audio_tonal.py` | Musicalidad tonal ("tell the people how to feel"): transición de emoción A→B, riser que acaba exacto en el corte, melodía generada bajo la voz; tabla de 8 moods (modo/raíz/timbre), verificación numérica (FFT de triadas, RMS cuartil del riser, notas ∈ escala, mix bit-exacto) |
 
 Todas incluyen una sección **Reference Implementation** con el código
 núcleo (expresiones ffmpeg exactas, easing, máscaras, álgebra) para que

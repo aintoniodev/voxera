@@ -205,6 +205,61 @@ audio del tutorial de zoom); verificado: bit-exacto fuera de la región,
   de las regiones y -26 dB en 3-9 kHz dentro (la frase 2 es "Otra de las
   cosas...", t=38.3-43.3 s).
 
+### Musicalidad emocional: transición tonal, riser y melodía (sin Premiere)
+
+Un corte suena mejor cuando la armonía empuja la emoción. `voxera audio
+transition | riser | melody` sintetiza elementos tonales EMOTIVALES
+(100 % numpy/scipy, deterministas, bit-exactos fuera de la región — misma
+convención que el lowpass) y los mezcla sobre el audio existente. La idea no
+es movimiento, es EMOCIÓN — "tell the people how to feel": cada mood de la
+tabla es una instrucción de cómo debe sentir el oyente la escena.
+
+```bash
+.venv-ims/Scripts/voxera audio transition in.wav -o out.wav \
+    --from calm --to hope --at 4 --dur 3      # la escena pasa de serenidad
+                                              # a promesa: acorde A → acorde B
+                                              # con voice-leading de movimiento
+                                              # mínimo (glide por voz, no
+                                              # crossfade crudo)
+.venv-ims/Scripts/voxera audio riser in.wav -o out.wav \
+    --mood tension --hit 8                    # tensión que TERMINA en el corte:
+                                              # notas que aceleran + crescendo,
+                                              # con cola que resuelve tras el hit
+.venv-ims/Scripts/voxera audio melody in.wav -o out.wav \
+    --mood wonder --bars 4 --seed 0 --duck 6  # campanas pentatónicas bajo la
+                                              # voz (pregunta + respuesta),
+                                              # determinista por seed
+```
+
+- `transition`: `--from`/`--to` (mood origen → destino), `--from-key`/
+  `--to-key` (tónicas, sostenidos), `--at` (inicio en s), `--dur`,
+  `--gain` (default -18 dB — apoyo, no protagonista), `--curve`/`--easing`
+  (el glide, misma convención S que lowpass/zoom).
+- `riser`: `--mood`, `--key`, `--hit` (instante del corte/drop en s — el
+  riser TERMINA aquí; default: fin del archivo), `--dur` (duración de la
+  subida), `--style` `notes`|`glide`, `--gain` (default -16 dB), `--tail`
+  (release en s que resuelve después del hit).
+- `melody`: `--mood`, `--key`, `--start`, `--bars` (default 4 — 2 frases),
+  `--bpm` (default: el del mood), `--seed` (misma seed → misma melodía),
+  `--gain` (default -20 dB), `--duck` (baja el audio existente bajo la
+  melodía; default 0 = off, 4-8 dB recomendado bajo voz).
+- Todos aceptan `--dry-run` (imprimen el plan: acordes y movimiento en
+  semitonos, grados del riser, notas y rango MIDI de la melodía).
+
+Los 8 moods — cada uno con su modo y su frase-emoción (qué le dice al
+oyente, la razón musical, no la etiqueta):
+
+| Mood | Modo | Le dice al oyente |
+|---|---|---|
+| `hope` | lidio | asciende y abre: el #4 del lidio es el color de las promesas |
+| `tension` | frigio | semitonos bajos y ritmo apretado: algo va a pasar |
+| `melancholy` | menor | desciende lento, sin prisa: lo que ya no vuelve |
+| `triumph` | mayor | arpegio ascendente de tónica a octava: meta alcanzada |
+| `wonder` | pentatónica mayor | campanas pentatónicas escasas: no hay notas malas, solo asombro |
+| `calm` | dorio | dorio (menor con 6ª mayor): serenidad con movimiento suave |
+| `mystery` | menor armónica | la 7ª mayor sobre acorde menor y el detune ancho: la puerta entreabierta |
+| `urgency` | pentatónica menor | pentatónica menor densa y staccato: corre |
+
 ### Cortar silencios automáticamente (jump-cuts, sin Premiere)
 
 Edición automática estilo TikTok/CapCut "remove silence": detecta los
@@ -298,6 +353,9 @@ skills del agente).
 | `voxera restore IN -o OUT [--declip] [--deplosive] [--dehum N] [--preset X]` | Restoration heurística: flat-tops, plosives, hum + master opcional. |
 | `voxera inspect IN` | `analyze` + recomendación (dehum/declick/restore/preset). |
 | `voxera enhance video.mp4 -o out.mp4 --preset X` | Vídeo directo: extrae audio → pipeline → mux (`-c:v copy` + AAC 192k, drift ≤10 ms). |
+| `voxera audio transition IN -o OUT --from X --to Y [--at S] [--dur D]` | Transición tonal entre emociones: acordes con voice-leading de movimiento mínimo. |
+| `voxera audio riser IN -o OUT [--mood M] [--hit S]` | Riser tonal que termina en el corte. |
+| `voxera audio melody IN -o OUT [--mood M] [--bars N] [--seed S]` | Melodía generada en tonalidad, determinista por seed, con ducking opcional. |
 
 **Presets congelados:** `creator` (-16 LUFS, natural+clear, default) · `youtube` (-14, warm+present) ·
 `podcast` (-16, rich+consistent) · `social` (-14, loud+punchy) · `bad-room` (-16, high-pass 90 Hz).
@@ -332,7 +390,7 @@ src/voxera/   enhance() contract, backend registry, audioio (policy), dsp/ (pipe
               video_enhance.py (fase 3: Real-ESRGAN CUDA)
 features/     Gherkin: enhance-cli (10 escenarios), master-cli (5), analyze-cli (3)
 acceptance/   APS Gherkin acceptance pipeline (parse→dry-check→generate→run)
-tests/        411 pytest unit tests en .venv-ims (3 skipped) + 44 stabilize en .venv-video
+tests/        449 pytest unit tests en .venv-ims (3 skipped) + 44 stabilize en .venv-video
 ui/           UI thin (index + A/B player + video.html + server.py: /enhance /score /vote /api/video)
 .auto/v2/     benchmark v2: synthetic + real separados (reports/*.md)
 swarmforge/   SwarmForge four-pack (specifier→coder→refactorer→architect)

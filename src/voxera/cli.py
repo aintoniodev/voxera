@@ -34,6 +34,7 @@ from voxera import video_magnify
 from voxera import video_silence
 from voxera import video_stabilize
 from voxera import audio_lowpass
+from voxera import audio_tonal
 
 PROG = "voxera"
 
@@ -746,6 +747,172 @@ def build_parser() -> argparse.ArgumentParser:
         help="imprimir el plan y salir sin escribir nada",
     )
 
+    atr = asub.add_parser(
+        "transition",
+        help="transición tonal entre emociones: acorde A → acorde B con "
+        "voice-leading de movimiento mínimo",
+        description="Cambio de emoción armónica: sintetiza un pad que va del "
+        "acorde del mood origen al del mood destino con glide logarítmico "
+        "voz a voz (movimiento mínimo, no un crossfade crudo) y lo mezcla "
+        "sobre el audio existente. La tabla de moods (hope, tension, "
+        "melancholy…) es 'tell the people how to feel': cada mood es una "
+        "instrucción de cómo debe sentir el oyente la escena. 100 % "
+        "numpy/scipy, sin Premiere.",
+    )
+    atr.add_argument("input", help="audio de entrada (.wav, .mp3, .m4a, .flac…)")
+    atr.add_argument("-o", "--output", required=True, help="salida .wav (48 kHz 24-bit)")
+    atr.add_argument(
+        "--from", dest="from_mood", choices=audio_tonal.MOOD_NAMES,
+        default=audio_tonal.TransitionOptions().from_mood,
+        help=f"emoción de origen (default {audio_tonal.TransitionOptions().from_mood} — "
+        f"de dónde parte la escena)",
+    )
+    atr.add_argument(
+        "--to", dest="to_mood", choices=audio_tonal.MOOD_NAMES,
+        default=audio_tonal.TransitionOptions().to_mood,
+        help=f"emoción de destino (default {audio_tonal.TransitionOptions().to_mood} — "
+        f"el sentir al que llega el corte)",
+    )
+    atr.add_argument(
+        "--from-key", dest="from_key", choices=audio_tonal.NOTE_NAMES, default=None,
+        help="tónica del acorde origen (sostenidos; default: la raíz del mood)",
+    )
+    atr.add_argument(
+        "--to-key", dest="to_key", choices=audio_tonal.NOTE_NAMES, default=None,
+        help="tónica del acorde destino (sostenidos; default: la raíz del mood)",
+    )
+    atr.add_argument(
+        "--at", type=float, default=audio_tonal.TransitionOptions().at,
+        help=f"inicio de la transición en s (default {audio_tonal.TransitionOptions().at:g} — "
+        f"el instante en que la escena cambia de emoción)",
+    )
+    atr.add_argument(
+        "--dur", type=float, default=audio_tonal.TransitionOptions().dur,
+        help=f"duración de la transición en s (default {audio_tonal.TransitionOptions().dur:g}; "
+        f"cuánto tarda el oyente en llegar al nuevo sentir)",
+    )
+    atr.add_argument(
+        "--gain", type=float, default=audio_tonal.TransitionOptions().gain_db,
+        help="ganancia del elemento en dB (negativa; default -18 — apoyo, no protagonista)",
+    )
+    atr.add_argument(
+        "--curve", type=float, default=audio_tonal.DEFAULT_CURVE,
+        help=f"curva de easing 0-100 del glide (default {audio_tonal.DEFAULT_CURVE:g} — "
+        f"misma convención que lowpass/video zoom; 0 = lineal)",
+    )
+    atr.add_argument(
+        "--easing", choices=audio_tonal.TONAL_EASINGS, default="smooth",
+        help="smooth (default, S-curva) | out (arranca rápido) | in (acelera) | linear",
+    )
+    atr.add_argument(
+        "--dry-run", action="store_true",
+        help="imprimir el plan (acordes, movimiento en semitonos) y salir sin escribir nada",
+    )
+
+    ari = asub.add_parser(
+        "riser",
+        help="riser tonal que termina exactamente en el corte/drop",
+        description="Tensión ascendente que TERMINA en el hit (el corte o drop "
+        "del vídeo): notas de la escala del mood que aceleran (o un glide de "
+        "2 octavas) con crescendo (ease)² y una cola de release que resuelve "
+        "después del impacto. Con --hit el riser acaba justo ahí; sin él, al "
+        "final del archivo. 100 % numpy/scipy, sin Premiere.",
+    )
+    ari.add_argument("input", help="audio de entrada (.wav, .mp3, .m4a, .flac…)")
+    ari.add_argument("-o", "--output", required=True, help="salida .wav (48 kHz 24-bit)")
+    ari.add_argument(
+        "--mood", choices=audio_tonal.MOOD_NAMES,
+        default=audio_tonal.RiserOptions().mood,
+        help=f"emoción del riser (default {audio_tonal.RiserOptions().mood} — "
+        f"la tensión que empuja hacia el corte)",
+    )
+    ari.add_argument(
+        "--key", choices=audio_tonal.NOTE_NAMES, default=None,
+        help="tónica (sostenidos; default: la raíz del mood)",
+    )
+    ari.add_argument(
+        "--hit", type=float, default=None,
+        help="instante del corte/drop en s — el riser TERMINA aquí "
+        "(default: fin del archivo)",
+    )
+    ari.add_argument(
+        "--dur", type=float, default=audio_tonal.RiserOptions().dur,
+        help=f"duración de la subida en s (default {audio_tonal.RiserOptions().dur:g}; "
+        f"la rampa de expectativa antes del hit)",
+    )
+    ari.add_argument(
+        "--style", choices=("notes", "glide"), default=audio_tonal.RiserOptions().style,
+        help="notes (default, grados que aceleran) | glide (barrido de 2 octavas "
+        "con vibrato creciente)",
+    )
+    ari.add_argument(
+        "--gain", type=float, default=audio_tonal.RiserOptions().gain_db,
+        help=f"ganancia del elemento en dB (negativa; default "
+        f"{audio_tonal.RiserOptions().gain_db:g} — apoyo, no protagonista)",
+    )
+    ari.add_argument(
+        "--tail", type=float, default=audio_tonal.RiserOptions().tail,
+        help="release en s que resuelve después del hit",
+    )
+    ari.add_argument(
+        "--dry-run", action="store_true",
+        help="imprimir el plan (subida, hit, tail) y salir sin escribir nada",
+    )
+
+    ame = asub.add_parser(
+        "melody",
+        help="melodía generada en tonalidad bajo la voz (determinista por seed)",
+        description="Melodía generada en la escala del mood, pregunta + "
+        "respuesta (la primera frase queda en el aire, la segunda resuelve "
+        "en la tónica), rejilla en corcheas y contorno melódico del mood. "
+        "Determinista: mismo seed → misma melodía. Con --duck baja el audio "
+        "existente bajo la melodía. 100 % numpy/scipy, sin Premiere.",
+    )
+    ame.add_argument("input", help="audio de entrada (.wav, .mp3, .m4a, .flac…)")
+    ame.add_argument("-o", "--output", required=True, help="salida .wav (48 kHz 24-bit)")
+    ame.add_argument(
+        "--mood", choices=audio_tonal.MOOD_NAMES,
+        default=audio_tonal.MelodyOptions().mood,
+        help=f"emoción de la melodía (default {audio_tonal.MelodyOptions().mood} — "
+        f"el color que acompaña a la voz)",
+    )
+    ame.add_argument(
+        "--key", choices=audio_tonal.NOTE_NAMES, default=None,
+        help="tónica (sostenidos; default: la raíz del mood)",
+    )
+    ame.add_argument(
+        "--start", type=float, default=audio_tonal.MelodyOptions().start,
+        help=f"inicio de la melodía en s (default {audio_tonal.MelodyOptions().start:g})",
+    )
+    ame.add_argument(
+        "--bars", type=int, default=audio_tonal.MelodyOptions().bars,
+        help=f"número de compases (default {audio_tonal.MelodyOptions().bars} — "
+        f"2 frases: pregunta + respuesta)",
+    )
+    ame.add_argument(
+        "--bpm", type=float, default=None,
+        help="tempo (default: el bpm del mood; 30-300)",
+    )
+    ame.add_argument(
+        "--seed", type=int, default=audio_tonal.MelodyOptions().seed,
+        help=f"semilla del generador (default {audio_tonal.MelodyOptions().seed} — "
+        f"misma seed, misma melodía)",
+    )
+    ame.add_argument(
+        "--gain", type=float, default=audio_tonal.MelodyOptions().gain_db,
+        help=f"ganancia del elemento en dB (negativa; default "
+        f"{audio_tonal.MelodyOptions().gain_db:g} — bajo la voz, nunca encima)",
+    )
+    ame.add_argument(
+        "--duck", type=float, default=audio_tonal.MelodyOptions().duck_db,
+        help="ducking del audio existente bajo la melodía en dB (default 0 = off; "
+        "4-8 recomendado bajo voz)",
+    )
+    ame.add_argument(
+        "--dry-run", action="store_true",
+        help="imprimir el plan (notas, rango MIDI, duck) y salir sin escribir nada",
+    )
+
     return parser
 
 
@@ -1335,6 +1502,72 @@ def _cmd_audio(args) -> int:
                 print(audio_lowpass.build_plan(args.input, opts))
                 return 0
             out = audio_lowpass.lowpass_file(args.input, args.output, opts)
+        except EnhancementError as exc:
+            print(f"{PROG}: error: {exc}", file=sys.stderr)
+            return 1
+        print(f"✓ {out}")
+        return 0
+
+    if args.audio_command == "transition":
+        opts = audio_tonal.TransitionOptions(
+            from_mood=args.from_mood,
+            to_mood=args.to_mood,
+            from_key=args.from_key,
+            to_key=args.to_key,
+            at=args.at,
+            dur=args.dur,
+            gain_db=args.gain,
+            curve=args.curve,
+            easing=args.easing,
+        )
+        try:
+            if args.dry_run:
+                print(audio_tonal.build_transition_plan(args.input, opts))
+                return 0
+            out = audio_tonal.transition_file(args.input, args.output, opts)
+        except EnhancementError as exc:
+            print(f"{PROG}: error: {exc}", file=sys.stderr)
+            return 1
+        print(f"✓ {out}")
+        return 0
+
+    if args.audio_command == "riser":
+        opts = audio_tonal.RiserOptions(
+            mood=args.mood,
+            key=args.key,
+            hit=args.hit,
+            dur=args.dur,
+            style=args.style,
+            gain_db=args.gain,
+            tail=args.tail,
+        )
+        try:
+            if args.dry_run:
+                print(audio_tonal.build_riser_plan(args.input, opts))
+                return 0
+            out = audio_tonal.riser_file(args.input, args.output, opts)
+        except EnhancementError as exc:
+            print(f"{PROG}: error: {exc}", file=sys.stderr)
+            return 1
+        print(f"✓ {out}")
+        return 0
+
+    if args.audio_command == "melody":
+        opts = audio_tonal.MelodyOptions(
+            mood=args.mood,
+            key=args.key,
+            start=args.start,
+            bars=args.bars,
+            bpm=args.bpm,
+            seed=args.seed,
+            gain_db=args.gain,
+            duck_db=args.duck,
+        )
+        try:
+            if args.dry_run:
+                print(audio_tonal.build_melody_plan(args.input, opts))
+                return 0
+            out = audio_tonal.melody_file(args.input, args.output, opts)
         except EnhancementError as exc:
             print(f"{PROG}: error: {exc}", file=sys.stderr)
             return 1
