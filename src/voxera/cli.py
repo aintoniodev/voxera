@@ -33,8 +33,13 @@ from voxera import video_teleport
 from voxera import video_magnify
 from voxera import video_silence
 from voxera import video_stabilize
+from voxera import captions
 from voxera import audio_lowpass
 from voxera import audio_tonal
+from voxera import autopilot as autopilot_mod
+
+_DEFAULT_LLM_CMD = autopilot_mod._DEFAULT_LLM_CMD
+from voxera import video_slowmo
 
 PROG = "voxera"
 
@@ -671,6 +676,114 @@ def build_parser() -> argparse.ArgumentParser:
         help="imprimir el plan (con la métrica de temblor) y salir sin escribir nada",
     )
 
+    vslow = vsub.add_parser(
+        "slowmo",
+        help="slow motion (y fast motion): ralentiza o acelera vídeo con setpts + atempo",
+        description=("Slow motion (factor < 1) o fast motion (factor > 1) sobre "
+        "todo el clip o un segmento dado (--at S:E), en un solo paso de "
+        "ffmpeg. setpts re-escala vídeo, atempo preserva el pitch del audio. "
+        "Opcionalmente minterpolate para interpolar frames (MUY lento)."),
+    )
+    vslow.add_argument("input", help="vídeo de entrada")
+    vslow.add_argument("-o", "--output", required=True, help="salida .mp4")
+    vslow.add_argument(
+        "--factor", type=float, default=video_slowmo.DEFAULT_FACTOR,
+        help=f"multiplicador de velocidad (default {video_slowmo.DEFAULT_FACTOR} = "
+        f"2x más lento; 0.25 = 4x más lento; 2.0 = 2x más rápido; "
+        f"rango {video_slowmo.FACTOR_MIN}–{video_slowmo.FACTOR_MAX})",
+    )
+    vslow.add_argument(
+        "--at", default=None, metavar="S:E",
+        help="segmento a ralentizar en segundos (S:E, p.ej. 1:3); "
+        "el resto del clip queda a 1x",
+    )
+    vslow.add_argument(
+        "--interpolate", choices=video_slowmo.INTERPOLATE_OPTIONS,
+        default=video_slowmo.DEFAULT_INTERPOLATE,
+        help="none (default) | minterpolate (interpola frames, MUY lento)",
+    )
+    vslow.add_argument(
+        "--fps", type=int, default=video_slowmo.DEFAULT_INTERPOLATE_FPS,
+        help=f"fps de interpolación minterpolate (default {video_slowmo.DEFAULT_INTERPOLATE_FPS})",
+    )
+    vslow.add_argument(
+        "--crf", type=int, default=18,
+        help="x264 CRF (default 18; más alto = fichero más pequeño)",
+    )
+    vslow.add_argument(
+        "--audio-bitrate", default="192k", help="AAC bitrate (default 192k)",
+    )
+    vslow.add_argument(
+        "--dry-run", action="store_true",
+        help="imprimir el plan y salir sin escribir nada",
+    )
+
+    vcap = vsub.add_parser(
+        "captions",
+        help="subtítulos/karaoke con ASR word-level (faster-whisper)",
+        description="Genera subtítulos en vídeo: transcripción word-level con "
+        "faster-whisper,打包 en cues, ASS karaoke o estático, y burn-in con "
+        "ffmpeg libass en un solo paso. Estilo karaoke con {\\k} por palabra "
+        "o estático con fade.",
+    )
+    vcap.add_argument("input", help="vídeo de entrada")
+    vcap.add_argument("-o", "--output", required=True, help="salida .mp4")
+    vcap.add_argument(
+        "--model", default=captions.DEFAULT_MODEL,
+        help=f"modelo Whisper (default: {captions.DEFAULT_MODEL})",
+    )
+    vcap.add_argument(
+        "--lang", default=None,
+        help="idioma (default: auto); p. ej. 'es', 'en'",
+    )
+    vcap.add_argument(
+        "--style", choices=captions.STYLES, default="karaoke",
+        help="karaoke (default, \\k por palabra) | static (fade in/out)",
+    )
+    vcap.add_argument(
+        "--text-style", choices=captions.TEXT_STYLES, default="classic",
+        help="classic (default, tal cual) | playful (minúsculas, sin puntuación)",
+    )
+    vcap.add_argument(
+        "--font-size", type=int, default=captions.DEFAULT_FONT_SIZE,
+        help=f"tamaño de fuente (default {captions.DEFAULT_FONT_SIZE})",
+    )
+    vcap.add_argument(
+        "--outline", type=int, default=captions.DEFAULT_OUTLINE,
+        help=f"grosor del borde (default {captions.DEFAULT_OUTLINE})",
+    )
+    vcap.add_argument(
+        "--max-lines", type=int, default=captions.DEFAULT_MAX_LINES,
+        help=f"máximo de líneas por cue (default {captions.DEFAULT_MAX_LINES})",
+    )
+    vcap.add_argument(
+        "--chars-per-sec", type=float, default=captions.DEFAULT_CHARS_PER_SEC,
+        help=f"velocidad de lectura (default {captions.DEFAULT_CHARS_PER_SEC})",
+    )
+    vcap.add_argument(
+        "--highlight", default="",
+        help="palabras a resaltar en naranja (separadas por coma)",
+    )
+    vcap.add_argument(
+        "--words-json", default=None, metavar="PATH",
+        help="JSON con palabras pre-transcritas (formato {\"words\": [...]})",
+    )
+    vcap.add_argument(
+        "--ass-only", default=None, metavar="PATH",
+        help="escribe el ASS aquí y NO hace burn-in",
+    )
+    vcap.add_argument(
+        "--crf", type=int, default=18,
+        help="x264 CRF (default 18; más alto = fichero más pequeño)",
+    )
+    vcap.add_argument(
+        "--audio-bitrate", default="192k", help="AAC bitrate (default 192k)",
+    )
+    vcap.add_argument(
+        "--dry-run", action="store_true",
+        help="imprimir el plan y salir sin escribir nada",
+    )
+
     # --- audio --------------------------------------------------------------
     audio_parser = subparsers.add_parser(
         "audio",
@@ -911,6 +1024,119 @@ def build_parser() -> argparse.ArgumentParser:
     ame.add_argument(
         "--dry-run", action="store_true",
         help="imprimir el plan (notas, rango MIDI, duck) y salir sin escribir nada",
+    )
+
+    # --- autopilot --------------------------------------------------------
+    ap_parser = subparsers.add_parser(
+        "autopilot",
+        help="raw→short: plan de edición + ejecución + A/B harness",
+        description="Orquesta el pipeline completo de edición: un planner "
+        "(rule determinista o LLM) genera un edit-spec JSON, el executor "
+        "compone las APIs de voxera, y el harness A/B produce ambas "
+        "variantes con checklist de publicación.",
+    )
+    ap_sub = ap_parser.add_subparsers(
+        dest="autopilot_command", required=True, metavar="COMMAND",
+    )
+
+    # autopilot run
+    apr = ap_sub.add_parser(
+        "run",
+        help="ejecutar autopilot: planificar + ejecutar → short optimizado",
+        description="Genera un edit-spec (rule o llm), ejecuta el pipeline "
+        "cutsilence→zoom→effects→captions, y escribe el manifest QA.",
+    )
+    apr.add_argument("input", help="vídeo de entrada (raw MP4)")
+    apr.add_argument(
+        "-o", "--output", required=True, help="salida .mp4"
+    )
+    apr.add_argument(
+        "--planner", choices=("rule", "llm"), default="rule",
+        help="planificador: rule (determinista, default) o llm",
+    )
+    apr.add_argument(
+        "--words-json", default=None, metavar="PATH",
+        help='JSON con palabras pre-transcritas (formato {"words": [...]})',
+    )
+    apr.add_argument(
+        "--llm-cmd", default=None, metavar="CMD",
+        help=f"comando LLM para planner=llm (default: {_DEFAULT_LLM_CMD})",
+    )
+    apr.add_argument(
+        "--max-dur", type=float, default=45.0,
+        help="duración máxima del short en segundos (default 45)",
+    )
+    apr.add_argument(
+        "--level", choices=("light", "medium", "aggressive"),
+        default="medium",
+        help="agresividad de cutsilence (default medium)",
+    )
+    apr.add_argument(
+        "--aspect", choices=("9:16", "keep"), default="9:16",
+        help="aspecto de salida (default 9:16)",
+    )
+    apr.add_argument(
+        "--crf", type=int, default=18,
+        help="x264 CRF (default 18)",
+    )
+    apr.add_argument(
+        "--model", default="base",
+        help="modelo Whisper para transcripción (default base)",
+    )
+    apr.add_argument(
+        "--dry-run", action="store_true",
+        help="imprimir el manifest sin ejecutar nada",
+    )
+
+    # autopilot ab
+    apab = ap_sub.add_parser(
+        "ab",
+        help="A/B harness: ejecuta rule + llm y genera checklist",
+        description="Ejecuta ambas variantes (rule y llm) sobre el mismo "
+        "input, genera {prefix}.ab_manifest.json con checklist de "
+        "publicación y comparación.",
+    )
+    apab.add_argument("input", help="vídeo de entrada (raw MP4)")
+    apab.add_argument(
+        "-o", "--prefix", required=True,
+        help="prefijo de salida (genera {prefix}.rule.mp4 y {prefix}.llm.mp4)",
+    )
+    apab.add_argument(
+        "--planner-a", choices=("rule", "llm"), default="rule",
+        help="primer planificador (default rule)",
+    )
+    apab.add_argument(
+        "--planner-b", choices=("rule", "llm"), default="llm",
+        help="segundo planificador (default llm)",
+    )
+    apab.add_argument(
+        "--llm-cmd", default=None, metavar="CMD",
+        help=f"comando LLM para planners que lo necesiten (default: {_DEFAULT_LLM_CMD})",
+    )
+    apab.add_argument(
+        "--max-dur", type=float, default=45.0,
+        help="duración máxima del short en segundos (default 45)",
+    )
+    apab.add_argument(
+        "--level", choices=("light", "medium", "aggressive"),
+        default="medium",
+        help="agresividad de cutsilence (default medium)",
+    )
+    apab.add_argument(
+        "--aspect", choices=("9:16", "keep"), default="9:16",
+        help="aspecto de salida (default 9:16)",
+    )
+    apab.add_argument(
+        "--crf", type=int, default=18,
+        help="x264 CRF (default 18)",
+    )
+    apab.add_argument(
+        "--model", default="base",
+        help="modelo Whisper para transcripción (default base)",
+    )
+    apab.add_argument(
+        "--words-json", default=None, metavar="PATH",
+        help='JSON con palabras pre-transcritas (formato {"words": [...]})',
     )
 
     return parser
@@ -1480,6 +1706,91 @@ def _cmd_video(args) -> int:
         print(f"✓ {out}")
         return 0
 
+    if args.video_command == "slowmo":
+        # Parse --at S:E
+        seg_start, seg_end = None, None
+        if args.at:
+            try:
+                seg_start, seg_end = (float(v) for v in args.at.split(":"))
+            except (ValueError, TypeError):
+                print(
+                    f"{PROG}: error: --at debe tener formato S:E (p.ej. 1:3), "
+                    f"got {args.at!r}",
+                    file=sys.stderr,
+                )
+                return 2
+        try:
+            if args.dry_run:
+                print(video_slowmo.build_plan(
+                    args.input,
+                    factor=args.factor,
+                    start=seg_start,
+                    end=seg_end,
+                    interpolate=args.interpolate,
+                    fps=args.fps,
+                    crf=args.crf,
+                    audio_bitrate=args.audio_bitrate,
+                ))
+                return 0
+            out = video_slowmo.slowmo_video(
+                args.input, args.output,
+                factor=args.factor,
+                start=seg_start,
+                end=seg_end,
+                interpolate=args.interpolate,
+                fps=args.fps,
+                crf=args.crf,
+                audio_bitrate=args.audio_bitrate,
+            )
+        except EnhancementError as exc:
+            print(f"{PROG}: error: {exc}", file=sys.stderr)
+            return 1
+        print(f"✓ {out}")
+        return 0
+
+    if args.video_command == "captions":
+        hl = tuple(h.strip() for h in args.highlight.split(',') if h.strip()) if args.highlight else ()
+        try:
+            if args.dry_run:
+                print(captions.build_plan(
+                    args.input,
+                    model=args.model,
+                    lang=args.lang,
+                    style=args.style,
+                    text_style=args.text_style,
+                    font_size=args.font_size,
+                    outline=args.outline,
+                    max_lines=args.max_lines,
+                    chars_per_sec=args.chars_per_sec,
+                    highlight=hl,
+                    words_json=args.words_json,
+                    ass_only=args.ass_only,
+                    crf=args.crf,
+                    audio_bitrate=args.audio_bitrate,
+                ))
+                return 0
+            out = captions.captions_video(
+                args.input, args.output,
+                words_json=args.words_json,
+                model=args.model,
+                lang=args.lang,
+                style=args.style,
+                text_style=args.text_style,
+                font_size=args.font_size,
+                outline=args.outline,
+                max_lines=args.max_lines,
+                chars_per_sec=args.chars_per_sec,
+                highlight=hl,
+                ass_only=args.ass_only,
+                crf=args.crf,
+                audio_bitrate=args.audio_bitrate,
+            )
+        except EnhancementError as exc:
+            print(f"{PROG}: error: {exc}", file=sys.stderr)
+            return 1
+        print(f"✓ {out}")
+        return 0
+
     return 2
 
 
@@ -1577,6 +1888,62 @@ def _cmd_audio(args) -> int:
     return 2
 
 
+def _cmd_autopilot(args) -> int:
+    if args.autopilot_command == "run":
+        try:
+            manifest = autopilot_mod.run_autopilot(
+                args.input, args.output,
+                planner=args.planner,
+                words_json=args.words_json,
+                llm_cmd=args.llm_cmd,
+                max_dur=args.max_dur,
+                level=args.level,
+                aspect=args.aspect,
+                crf=args.crf,
+                model=args.model,
+                dry_run=args.dry_run,
+            )
+        except EnhancementError as exc:
+            print(f"{PROG}: error: {exc}", file=sys.stderr)
+            return 1
+        if args.dry_run:
+            print(json.dumps(manifest, indent=2, ensure_ascii=False))
+        else:
+            qa = manifest.get("qa", {})
+            dur_out = qa.get("dur_out", 0)
+            print(f"✓ {args.output} · {dur_out:.2f}s")
+        return 0
+
+    if args.autopilot_command == "ab":
+        try:
+            ab_manifest = autopilot_mod.run_ab(
+                args.input, args.prefix,
+                planner_a=args.planner_a,
+                planner_b=args.planner_b,
+                llm_cmd=args.llm_cmd,
+                max_dur=args.max_dur,
+                level=args.level,
+                aspect=args.aspect,
+                crf=args.crf,
+                model=args.model,
+                words_json=args.words_json,
+            )
+        except EnhancementError as exc:
+            print(f"{PROG}: error: {exc}", file=sys.stderr)
+            return 1
+        for label in ("rule", "llm"):
+            v = ab_manifest.get("variants", {}).get(label, {})
+            if v.get("error"):
+                print(f"  ✗ {label}: {v['error']}")
+            elif v.get("output"):
+                qa = v.get("qa", {})
+                print(f"  ✓ {v['output']} · {qa.get('dur_out', 0):.2f}s")
+        print(f"  manifest: {args.prefix}.ab_manifest.json")
+        return 0
+
+    return 2
+
+
 def main(argv: list[str] | None = None) -> int:
     # Windows console/pipes default to cp1252 and crash on '✓' etc.
     for stream in (sys.stdout, sys.stderr):
@@ -1605,6 +1972,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_video(args)
     if args.command == "audio":
         return _cmd_audio(args)
+    if args.command == "autopilot":
+        return _cmd_autopilot(args)
 
     parser.error(f"unknown command: {args.command}")
     return 2
