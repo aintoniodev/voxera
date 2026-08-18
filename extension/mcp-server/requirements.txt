@@ -1,0 +1,6 @@
+# Requirements for pixabay_server.py
+# Documentation only — do not pip install; these are already available.
+#
+# Python >= 3.10
+# mcp (pip install mcp) — provides mcp.server.fastmcp.FastMCP
+# stdlib only for HTTP: urllib.request, json, hashlib, pathlib, os, tempfile

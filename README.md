@@ -1,427 +1,151 @@
-# voxera
+# Stock Assets Plugin for pi (Pixabay · Freesound · Jamendo)
 
-Voice/podcast post-production CLI (`voxera`) powered by pluggable neural backends.
-Brand: **aintonio.dev | Antonio Gómez** — an AI Engineer's 30-day content challenge product.
+A pi agent plugin that exposes the [Pixabay](https://pixabay.com/) stock image/video API, [Freesound](https://freesound.org/) sound effects API, and [Jamendo](https://www.jamendo.com/) music API as an **MCP server** plus a shared **agent skill**, so any agent on this machine can fetch royalty-free media on demand.
 
-> Tagline: **"Sound like you, only better."** — phase 1 = denoiser; phase 2 = *"haz que mi voz
-> grabada suene como una voz profesional de vídeo"* (denoiser → analyzer + voice mastering).
+## How agents get motivated to use it
 
-## Demo (40 s)
-
-<div align="center">
-  <video src="media/demo-video.mp4" controls poster="media/demo-poster.png" width="100%"></video>
-  <p><em>Si el vídeo no se reproduce aquí: <a href="media/demo-video.mp4">descargar demo.mp4</a> ·
-  fuente en <code>voxera-demo/</code> (Remotion, voz Piper ES, audio real antes/después)</em></p>
-</div>
-
-## Capturas
-
-<div align="center">
-  <img src="media/captura-app.png" alt="voxera app" width="320">
-  <img src="media/captura-5.png" alt="antes vs después" width="480">
-</div>
-<div align="center">
-  <img src="media/captura-susurro.png" alt="susurro antes/después" width="480">
-  <img src="media/captura-chorros.png" alt="chorros antes/después" width="480">
-</div>
-
-## Quickstart
-
-```bash
-# env (Python 3.11)
-uv venv --python 3.11 .venv-ims && uv pip install -p .venv-ims -e .
-
-# enhance (NN backend only — back-compat)
-.venv-ims/Scripts/voxera enhance in.wav -o out.wav   # default backend (deepfilternet, Pareto winner)
-
-# enhance + voice master pipeline (fase 2): NN SIEMPRE + DSP completo
-.venv-ims/Scripts/voxera enhance in.wav -o out.wav --preset creator    # preset por defecto
-.venv-ims/Scripts/voxera enhance in.wav -o out.wav --preset youtube --dry-run   # plan sin procesar
-
-# voice mastering ONLY (sin red neuronal)
-.venv-ims/Scripts/voxera master in.wav -o out.wav --preset youtube
-
-# analyze (nunca modifica audio)
-.venv-ims/Scripts/voxera analyze in.wav                       # resumen TTY
-.venv-ims/Scripts/voxera analyze in.wav --format json -o report.json
-
-# tune the backend (fase 1)
-.venv-ims/Scripts/voxera enhance in.wav -o out.wav --backend dpdfnet --model dpdfnet2 --attn-limit-db 24
-```
-
-## Vídeo (fase 3) — mejora de vídeo vertical 9:16
-
-Mejora vídeos verticales (TikTok/Reels/Shorts): limpia compresión, upscala a
-**1080×1920 @30 fps** y remuxea el audio. Requiere **GPU NVIDIA (CUDA)** — CPU
-medido a ~67× más lento que realtime, no soportado.
-
-```bash
-# env (Python 3.11, CUDA)
-uv venv --python 3.11 .venv-video
-uv pip install -p .venv-video torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-uv pip install -p .venv-video -e ".[video]"
-uv pip uninstall -p .venv-video webrtcvad   # paquete fuente roto en Windows; queda webrtcvad-wheels
-
-# pesos (models/ está en .gitignore; descarga manual una vez)
-mkdir -p models/video
-curl -L --fail -o models/video/realesr-animevideov3.pth https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-animevideov3.pth
-curl -L --fail -o models/video/RealESRGAN_x4plus.pth https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth
-
-# uso
-.venv-video/Scripts/voxera video info in.mp4                                # probe JSON
-.venv-video/Scripts/voxera video enhance in.mp4 -o out.mp4                  # default: animevideov3 → 1080x1920@30
-.venv-video/Scripts/voxera video enhance in.mp4 -o out.mp4 --master-audio   # + voz masterizada (creator)
-.venv-video/Scripts/voxera video enhance in.mp4 -o out.mp4 --model x4plus   # escape "natural" (~10x más lento)
-.venv-video/Scripts/voxera video enhance in.mp4 -o out.mp4 --dry-run        # plan, no escribe nada
-.venv-video/Scripts/voxera video compare a.mp4 b.mp4 -o ab.mp4 --source orig.mp4   # A/B 3 paneles
-.venv-video/Scripts/voxera video zoom in.mp4 -o out.mp4 --anchor 0.5,0.33              # zoom Grow (ffmpeg, sin GPU)
-.venv-video/Scripts/voxera video teleport in.mp4 -o out.mp4 --time 36                  # teletransportación REAL: parpadeo 2-2-2 + persona borrada de A (fondo LaMa) y viva en B
-.venv-video/Scripts/voxera video teleport in.mp4 -o out.mp4 --time 36 --shift 25,0     # reaparece a la derecha (dx,dy en % del frame)
-.venv-video/Scripts/voxera video teleport in.mp4 -o out.mp4 --time 36 --vanish         # desaparece y no reaparece
-.venv-video/Scripts/voxera video magnify in.mp4 -o out.mp4 --center 0.5,0.4           # lente Magnify (ffmpeg, sin GPU)
-.venv-video/Scripts/voxera video stabilize in.mp4 -o out.mp4                     # anti-temblor de mano (OpenCV+ffmpeg, sin GPU)
-.venv-ims/Scripts/voxera audio lowpass in.wav -o out.wav --start 4 --end 12           # efecto Pase Bajo (numpy/scipy)
-```
-
-### Zoom 
-
-- **Modelo default: `animevideov3`** — decisión AB humana en vídeo (2026-08-12): gana en calidad
-  percibida en dos contenidos (talking-head y walking/animación) y es ~7-10× más rápido.
-  `--model x4plus` = más textura real, ~10× más lento.
-- **Tiempos medidos (RTX 2060 6 GB, tile=512, fp16):** animevideov3 0.85 fps @720p / 0.39 @1080p;
-  x4plus 0.12 / 0.04. ≈1 h de cómputo por minuto de vídeo (animevideov3, 30 fps). Throttling
-  térmico tras ~1 h continua (~-25%).
-- **Web UI:** `.venv-video/Scripts/python.exe ui/server.py` → http://127.0.0.1:8770/video.html
-  (upload → job asíncrono → progreso → descarga + still antes/después).
-- **Spec completa:** `docs/SPECS-fase3-video.md`.
-
-### Zoom "Grow" (sin Premiere)
-
-Replicación del truco del tutorial de @serri.mp4 (medido frame a frame en el
-propio vídeo: zoom 1.0 → 1.40 en ~4 s con curva S, ancla en el sujeto, y
-shrink 1.0 → 0.77): zoom con **curva de easing** + **punto de anclaje**,
-ampliar y/o reducir. `voxera video zoom` es 100 % ffmpeg (motor zoompan,
-canvas supersampled) — sin GPU, sin Premiere, sin keyframes a mano.
-
-```bash
-.venv-video/Scripts/voxera video zoom in.mp4 -o out.mp4 \
-    --pct 30 --anchor 0.5,0.33 --curve 62 --dir pulse
-
-# criterio automático: picos de energía de la voz (recomendado)
-.venv-video/Scripts/voxera video zoom in.mp4 -o out.mp4 \
-    --pct 30 --anchor 0.5,0.33 --dir pulse --auto-emphasis \
-    --pulse-dur 3 --max-pulses 4
-```
-
-- `--dir grow|shrink|pulse` — ampliar, reducir (ventana negra), o ampliar y
-  reducir (default grow). `--pct` — % de zoom (default 40, como la demo del
-  tutorial; 12 % en 55 s es invisible). `--hold` — fracción en el pico.
-- `--anchor X,Y` — punto que queda **fijo en pantalla** mientras la imagen
-  crece/encoge alrededor (semántica Premiere; talking-head ≈ `0.5,0.33`).
-- `--curve` 0-100 — fuerza del easing (default 62 — el rango 60-65 del
-  tutorial; 0 = lineal). `--easing smooth|out|in|linear`.
-- `--auto-emphasis` — detecta picos de energía de la voz (envolvente RMS,
-  centroide de regiones) y aplica un pulso en cada momento.
-- `--start/--end` — segmento. `--dry-run` — plan sin escribir.
-- Ejemplo real: `media/videos/zoomed/long1_growzoom.mp4` (+30 %, ancla cara,
-  curva 62, pulse, auto-emphasis en t = 1.18/20.68/30.76/38.63 s sobre
-  `long1_enhanced.mp4`); verificado por SSIM 0.997 contra el window teórico
-  en los picos y 1.000 en las líneas base. Con la voz filtrada en dos frases
-  (efecto Pase Bajo): `long1_growzoom_lowpass.mp4` (mismo video, audio
-  procesado).
-
-### Lente "Magnify" (sin Premiere)
-
-Replicación del efecto "Magnify" de Adobe Premiere Pro 26.3 (tutorial de
-@billycreative_): una lente circular que amplía la zona que hay debajo,
-como una lupa al enseñar un paper. Medido en el propio tutorial (anillo
-circular detectado por Hough + continuidad de borde en 720x1280): radio
-~0.35 del ancho, borde nítido, mitad superior del frame. `voxera video
-magnify` es 100 % ffmpeg + dos PNG en gris (máscara con pluma y aro)
-generados con numpy — sin GPU, sin Premiere, sin keyframes.
-
-```bash
-.venv-video/Scripts/voxera video magnify in.mp4 -o out.mp4 \
-    --center 0.5,0.4 --size 0.35 --zoom 3
-```
-
-- **La lente se mueve por la escena** (default `--motion auto`): los
-  movimientos se disparan con los picos de energía de la voz (misma
-  envolvente RMS que `video zoom`) y, si no hay voz, barrido automático por
-  celdas con pausa en cada zona. `scan` = barrido puro; `voice` = solo con
-  voz (error si no detecta); `static` = lente quieta.
-- `--grid COLSxROWS` — celdas del barrido en orden de lectura (default
-  2x2, máx 6). `--hold` — pausa por celda en s (default 2.5).
-  `--move-dur` — transición entre celdas en s (default 1.2, curva S).
-  `--min-gap` — separación mínima entre momentos de voz (default 3).
-- **Calidad** (prioridad del usuario): el pipeline trabaja TODO en YUV sin
-  conversiones RGB — la máscara circular se aplica con `maskedmerge`
-  (blend lineal por luma) — y el upscale del patch es lanczos + unsharp
-  leve (`--sharpen`, default 0.5; 0 = sin). Fuera de la lente el frame
-  queda intacto (verificado: diff media 0.35-0.9 en vídeo real).
-- `--center X,Y` (solo static) · `--size` (default 0.35) · `--zoom`
-  (default 3) · `--feather` (default 0.05) · `--ring-width` (default
-  0.025) · `--start/--end` · `--dry-run`.
-- Ejemplos: `media/videos/magnified/paper_magnify_motion.mp4` (paper
-  sintético, barrido 2x2) y `tutorial_magnify_voice.mp4` (lente movida por
-  la voz sobre el propio tutorial, segmento 21-31 s).
-
-### Efecto "Pase Bajo" de audio (sin Premiere)
-
-Replicación del efecto "Pase Bajo" del tutorial de @serri.mp4 (medido en el
-propio audio del tutorial, extraído vía CDP: cutoff 800 Hz declarado
-—"ajustaremos el valor a 800 hercios"—, transición predeterminada de
-Premiere (Constant Power, ~1 s) en los cortes, pendiente ~12 dB/oct):
-filtra las frecuencias agudas del clip con **rampas suaves** en los bordes
-para que el cambio no sea brusco. `voxera audio lowpass` es 100 %
-numpy/scipy — sin Premiere, sin keyframes a mano.
-
-```bash
-.venv-ims/Scripts/voxera audio lowpass in.wav -o out.wav \
-    --start 4 --end 12              # el caso del tutorial: rampa de entrada,
-                                    # mantener, rampa de salida ("blip")
-.venv-ims/Scripts/voxera audio lowpass in.wav -o out.wav   # todo el clip
-```
-
-- `--cutoff` — frecuencia de corte en Hz (default 800, la del tutorial).
-- `--start/--end` — región filtrada; con ambos = blip (el caso del tutorial:
-  el segmento entre los dos cortes); solo `--start` = el filtro entra y se
-  queda; solo `--end` = empieza filtrado y se suelta.
-- `--transition` — duración de la rampa en cada borde en s (default 1 — la
-  "transición predeterminada" de Premiere; 0 = cambio brusco).
-- `--curve` 0-100 — fuerza del easing (default 62 — el rango 60-65 del
-  creador, misma convención que `video zoom`; 0 = lineal).
-- `--order` 1|2|4 — orden del filtro (default 2, ~12 dB/oct medido; 1 = 6
-  dB/oct, 4 = 24 dB/oct). `--dry-run` — plan sin escribir.
-- Ejemplo real: `media/audio/lowpass/demo_blip.wav` (blip 4-12 s sobre el
-audio del tutorial de zoom); verificado: bit-exacto fuera de la región,
--27.8 dB en la banda 3-9 kHz dentro (teoría butter2@800), bajo preservado
-(-0.1 dB) y rampas S con correlación 0.999 (método ratio out/in).
-- Ejemplo combinado zoom + voz lowpass:
-  `media/videos/zoomed/long1_growzoom_lowpass.mp4` — el growzoom de long1 con
-  dos frases de la voz filtradas a 800 Hz (30.1-35.6 s y 38.2-43.4 s,
-  transición 0.5 s), coincidiendo con los pulsos de zoom en t=30.76 y
-  38.63 s para ver/oir los dos efectos a la vez; verificado bit-exacto fuera
-  de las regiones y -26 dB en 3-9 kHz dentro (la frase 2 es "Otra de las
-  cosas...", t=38.3-43.3 s).
-
-### Musicalidad emocional: transición tonal, riser y melodía (sin Premiere)
-
-Un corte suena mejor cuando la armonía empuja la emoción. `voxera audio
-transition | riser | melody` sintetiza elementos tonales EMOTIVALES
-(100 % numpy/scipy, deterministas, bit-exactos fuera de la región — misma
-convención que el lowpass) y los mezcla sobre el audio existente. La idea no
-es movimiento, es EMOCIÓN — "tell the people how to feel": cada mood de la
-tabla es una instrucción de cómo debe sentir el oyente la escena.
-
-```bash
-.venv-ims/Scripts/voxera audio transition in.wav -o out.wav \
-    --from calm --to hope --at 4 --dur 3      # la escena pasa de serenidad
-                                              # a promesa: acorde A → acorde B
-                                              # con voice-leading de movimiento
-                                              # mínimo (glide por voz, no
-                                              # crossfade crudo)
-.venv-ims/Scripts/voxera audio riser in.wav -o out.wav \
-    --mood tension --hit 8                    # tensión que TERMINA en el corte:
-                                              # notas que aceleran + crescendo,
-                                              # con cola que resuelve tras el hit
-.venv-ims/Scripts/voxera audio melody in.wav -o out.wav \
-    --mood wonder --bars 4 --seed 0 --duck 6  # campanas pentatónicas bajo la
-                                              # voz (pregunta + respuesta),
-                                              # determinista por seed
-```
-
-- `transition`: `--from`/`--to` (mood origen → destino), `--from-key`/
-  `--to-key` (tónicas, sostenidos), `--at` (inicio en s), `--dur`,
-  `--gain` (default -18 dB — apoyo, no protagonista), `--curve`/`--easing`
-  (el glide, misma convención S que lowpass/zoom).
-- `riser`: `--mood`, `--key`, `--hit` (instante del corte/drop en s — el
-  riser TERMINA aquí; default: fin del archivo), `--dur` (duración de la
-  subida), `--style` `notes`|`glide`, `--gain` (default -16 dB), `--tail`
-  (release en s que resuelve después del hit).
-- `melody`: `--mood`, `--key`, `--start`, `--bars` (default 4 — 2 frases),
-  `--bpm` (default: el del mood), `--seed` (misma seed → misma melodía),
-  `--gain` (default -20 dB), `--duck` (baja el audio existente bajo la
-  melodía; default 0 = off, 4-8 dB recomendado bajo voz).
-- Todos aceptan `--dry-run` (imprimen el plan: acordes y movimiento en
-  semitonos, grados del riser, notas y rango MIDI de la melodía).
-
-Los 8 moods — cada uno con su modo y su frase-emoción (qué le dice al
-oyente, la razón musical, no la etiqueta):
-
-| Mood | Modo | Le dice al oyente |
-|---|---|---|
-| `hope` | lidio | asciende y abre: el #4 del lidio es el color de las promesas |
-| `tension` | frigio | semitonos bajos y ritmo apretado: algo va a pasar |
-| `melancholy` | menor | desciende lento, sin prisa: lo que ya no vuelve |
-| `triumph` | mayor | arpegio ascendente de tónica a octava: meta alcanzada |
-| `wonder` | pentatónica mayor | campanas pentatónicas escasas: no hay notas malas, solo asombro |
-| `calm` | dorio | dorio (menor con 6ª mayor): serenidad con movimiento suave |
-| `mystery` | menor armónica | la 7ª mayor sobre acorde menor y el detune ancho: la puerta entreabierta |
-| `urgency` | pentatónica menor | pentatónica menor densa y staccato: corre |
-
-### Cortar silencios automáticamente (jump-cuts, sin Premiere)
-
-Edición automática estilo TikTok/CapCut "remove silence": detecta los
-silencios entre frases y los recorta del vídeo **y** del audio a la vez,
-generando jump-cuts con sync A/V exacto. Reutiliza el VAD de `voxera
-silence` (margen de respiración de 200 ms: las respiraciones nunca se
-cortan). 100 % ffmpeg — sin Premiere, sin edición manual.
-
-```bash
-.venv-video/Scripts/voxera video cutsilence in.mp4 -o out.mp4
-
-# ritmo más agresivo (TikTok) + padding mínimo
-.venv-video/Scripts/voxera video cutsilence in.mp4 -o out.mp4 \
-    --level aggressive --keep 0.1
-
-# plan sin escribir nada
-.venv-video/Scripts/voxera video cutsilence in.mp4 -o out.mp4 --dry-run
-```
-
-- `--level light|medium|aggressive` — cuándo un gap cuenta como silencio
-  (gaps > 1.5 s / 0.8 s / 0.4 s; default medium).
-- `--keep SEG` — silencio que queda en cada corte (default 0.15 s — evita
-  el sonido robótico del corte a cero; `--keep 0` = cortes a cero).
-- Cómo funciona: cortes cuantizados a la rejilla de frames del vídeo
-  (n/fps) y un solo paso de ffmpeg (`select`/`aselect` con la misma
-  expresión de rangos + `setpts`/`asetpts`) → **sync frame-accurate** sin
-  drift. El vídeo se re-encoda (libx264 CRF 18 + AAC 192k).
-- Verificado: duración de salida = suma de tramos conservados (±1 frame),
-  sync A/V < 20 ms, sin voz → error (exit 1), sin silencios → copia directa.
-- Demo real: `media/demo-video.mp4` (40.6 s de voz) → `--level medium`
-  elimina 8.15 s (5 cortes); verificado numéricamente (frames exactos).
-
-### Estabilización de vídeo (anti-temblor, sin Premiere)
-
-Quita el temblor de cámara de vídeos grabados a mano (handheld), como el
-Warp Stabilizer de Premiere en modo *Smooth Motion*: estima el movimiento
-frame a frame (features Shi-Tomasi + Lucas-Kanade + RANSAC), suaviza la
-trayectoria acumulada con un gaussiano y corrige cada frame con un warp.
-100 % OpenCV + ffmpeg — sin GPU, sin Premiere. Vídeo ya estable → copia
-directa.
-
-```bash
-.venv-video/Scripts/voxera video stabilize in.mp4 -o out.mp4
-
-# más pegado (más recorte), o bordes negros a la vista (inspección)
-.venv-video/Scripts/voxera video stabilize in.mp4 -o out.mp4 --smoothing 30
-.venv-video/Scripts/voxera video stabilize in.mp4 -o out.mp4 --crop black
-
-# plan con la métrica de temblor (antes → después), sin escribir nada
-.venv-video/Scripts/voxera video stabilize in.mp4 -o out.mp4 --dry-run
-```
-
-- `--smoothing SIGMA` — sigma del gaussiano sobre la trayectoria, en
-  frames (default 15 ≈ 0.5 s a 30 fps; más = más pegado pero más lag en
-  paneos; 0 = sin suavizado).
-- `--max-shift PX` / `--max-angle DEG` — guardas: los paneos rápidos y
-  cortes de escena no se estabilizan, se congelan (default: shift auto =
-  5 % de min(w,h); ángulo 1.5°).
-- `--crop keep|black` — keep (default): zoom adaptativo **mínimo** que
-  cubre los bordes que asoman (capado a `--max-zoom` 1.2); black: bordes
-  negros a la vista (útil para ver qué hace el estabilizador).
-- Cómo funciona: pass 1 estima el temblor (a resolución ≤ 640 px) y
-  calcula la trayectoria acumulada C_t → suavizado D_t → corrección
-  W_t = D_t⁻¹·C_t → zoom; pass 2 corrige frame a frame y re-encoda
-  (libx264 CRF 18, misma resolución/fps → **duración sin cambios**); el
-  audio original se remuxea (copiado bit-exacto si el códec lo permite,
-  si no AAC 192k). Determinista: mismo input → mismo output byte a byte.
-- Verificado: temblor medido con phase correlation (ajeno al módulo)
-  cae ≥ 50 % (en la práctica ~90 % en el sintético: 2.4 px → 0.3 px
-  medianos), duración/fps/audio preservados, estático → copia directa
-  bit-exacta, 44 tests.
-
-### Skills del agente (conocimiento procedural)
-
-Cómo se midieron los efectos, criterios de auto-aplicación, trampas de
-ffmpeg/TikTok y verificación numérica: `docs/skills/` (mirror en repo de los
-skills del agente).
-
-## Comandos (Track 1, spec fase 2)
-
-| Comando | Qué hace |
-|---|---|
-| `voxera enhance IN -o OUT [--preset X]` | Restoration + voice mastering: backend NN + pipeline DSP completo. `--preset` **siempre** ejecuta el pipeline (default `creator`); sin flag = solo backend (back-compat). |
-| `voxera enhance IN -o OUT --dsp-only` | Pipeline sin red neuronal (master puro). |
-| `voxera enhance IN -o OUT --dry-run` | Plan `VOXERA PLAN` sin escribir OUT ni cargar la NN. |
-| `voxera master IN -o OUT [--preset X]` | Voice mastering ONLY: DC → high-pass LR24 → [dehum] → EQ vocal → de-esser → comp → limiter -1 dBTP → loudnorm. |
-| `voxera analyze IN [--format tty\|json] [-o report.json]` | Análisis completo con confidence: LUFS-I/S/LRA/RMS/TP, VAD, SNR, bandas espectrales, hum 50/100/150, RT60, DC, plosives, breaths, mouth clicks, noise type. |
-| `voxera score IN [--ref ORIG]` | Voice Score CVS 0-100 (Noise/Clarity/Loudness/Room/Dynamics) + veredicto; `--ref` → Voice Preservation % (resemblyzer). |
-| `voxera silence IN -o OUT --level L [--breaths preserve\|attenuate\|remove] [--declick]` | Recorta silencios sin cortar respiraciones; reporta `original → cleaned`. |
-| `voxera video cutsilence IN -o OUT [--level L] [--keep S]` | Edición automática de vídeo: elimina silencios (jump-cuts estilo TikTok), audio y vídeo a la vez con sync frame-accurate. |
-| `voxera restore IN -o OUT [--declip] [--deplosive] [--dehum N] [--preset X]` | Restoration heurística: flat-tops, plosives, hum + master opcional. |
-| `voxera inspect IN` | `analyze` + recomendación (dehum/declick/restore/preset). |
-| `voxera enhance video.mp4 -o out.mp4 --preset X` | Vídeo directo: extrae audio → pipeline → mux (`-c:v copy` + AAC 192k, drift ≤10 ms). |
-| `voxera audio transition IN -o OUT --from X --to Y [--at S] [--dur D]` | Transición tonal entre emociones: acordes con voice-leading de movimiento mínimo. |
-| `voxera audio riser IN -o OUT [--mood M] [--hit S]` | Riser tonal que termina en el corte. |
-| `voxera audio melody IN -o OUT [--mood M] [--bars N] [--seed S]` | Melodía generada en tonalidad, determinista por seed, con ducking opcional. |
-
-**Presets congelados:** `creator` (-16 LUFS, natural+clear, default) · `youtube` (-14, warm+present) ·
-`podcast` (-16, rich+consistent) · `social` (-14, loud+punchy) · `bad-room` (-16, high-pass 90 Hz).
-
-**Exit codes:** `0` OK · `1` error de procesamiento · `2` error de uso/backend desconocido ·
-`20` `VOXERA_NO_SPEECH` (VAD speech ratio < 5%; `analyze` sigue funcionando).
-
-**Política de formatos (congelada, Track 1A):** input WAV 16/22.05/44.1/48 kHz mono/stereo →
-interno **48 kHz mono** (downmix energía `0.5·(L+R)`, resample soxr) → salida **WAV PCM 24-bit**.
-Determinismo: DSP byte-equivalente; JSON de reports estable para CI (claves ordenadas, floats fijos,
-única excepción `processing_time_s`). Device: `--device auto|cpu|cuda`; `--seed N` para la NN.
-
-## Backends (pluggable, metric-driven)
-
-| Backend | Runtime | GPU | Status | Pareto (pesq / rtf) |
-|---|---|---|---|---|
-| `deepfilternet` | Python (`df`+torch) / Rust bin | ✅ CUDA torch auto | ✅ **DEFAULT (ganador)** | **DeepFilterNet2 pf=off: 3.28 / 0.08** |
-| `dpdfnet` | ONNX (real-time CPU) | ✅ vía `onnxruntime-gpu` (CUDA) | ✅ disponible | dpdfnet2@attn24: 2.88 / 0.38 |
-| `resemble` | offline diffusion | ✅ CUDA recomendado (lento en CPU) | ⚠️ evaluado, rinde peor en PESQ | full: 1.74 @ rtf 12.8 · denoise_only: 2.24 @ 0.71 |
-
-**GPU está soportado.** Esta máquina tiene una NVIDIA RTX 2060 6GB (torch CUDA 2.11). Los backends
-usan CUDA donde esté disponible; el CLI usa `--device auto` (CUDA si hay, si no CPU).
-
-Model/param selection is **empirical** (Pareto quality-vs-RTF on an ES+EN benchmark set), never
-assumed — see `.auto/` (autoresearch).
+- **Skill (auto-invoked):** `stock-assets` lives in `~/.agents/skills/stock-assets/` — the shared skills directory read by ALL agent harnesses (pi, Claude Code, Codex, Orca, SwarmForge agents, …). Its description is written with trigger words (thumbnails, b-roll, cover art, backgrounds, SFX, ambient audio, music tracks…) so agents load it automatically whenever media is needed. Renamed from `pixabay-assets` because it covers three providers.
+- **System-prompt nudge (pi):** the extension appends a stock-media guideline to every turn's system prompt (`before_agent_start`), telling the agent to use the `pixabay_*` tools instead of asking the user where to get media.
+- **MCP tools (pi):** registered via `mcp.json` → `pixabay` server (lazy, directTools).
 
 ## Architecture
 
 ```
-src/voxera/   enhance() contract, backend registry, audioio (policy), dsp/ (pipeline+presets),
-              analyze.py, master.py, vad.py, device.py, determinism.py, CLI,
-              video_enhance.py (fase 3: Real-ESRGAN CUDA)
-features/     Gherkin: enhance-cli (10 escenarios), master-cli (5), analyze-cli (3)
-acceptance/   APS Gherkin acceptance pipeline (parse→dry-check→generate→run)
-tests/        449 pytest unit tests en .venv-ims (3 skipped) + 44 stabilize en .venv-video
-ui/           UI thin (index + A/B player + video.html + server.py: /enhance /score /vote /api/video)
-.auto/v2/     benchmark v2: synthetic + real separados (reports/*.md)
-swarmforge/   SwarmForge four-pack (specifier→coder→refactorer→architect)
-.auto/        autoresearch harness (gitignored): measure.py, candidate.json, log.jsonl
+┌───────────────────────────────────────────────────────────────────────────┐
+│  ANY agent (pi, Claude Code, Codex, ...)                                  │
+│    ~/.agents/skills/stock-assets/SKILL.md   ← auto-loaded when media      │
+│    is requested (trigger-word description)                                │
+│                                                                            │
+│  pi agent additionally:                                                    │
+│    before_agent_start ──► system prompt nudge ("use pixabay_* tools")      │
+│    /pixabay setup/status ──► index.ts (extension)                          │
+│                                │                                           │
+│                                ▼                                           │
+│                         mcp.json entry                                     │
+│                         "pixabay" server                                   │
+│                                │                                           │
+│                                ▼                                           │
+│                  mcp-server/pixabay_server.py                              │
+│                  (FastMCP stdio, 11 tools)                                 │
+│                                │                                           │
+│                  ┌─────────────┼─────────────┐                             │
+│                  ▼             ▼             ▼                             │
+│            pixabay.com    freesound.org   api.jamendo.com                  │
+│               /api/         /apiv2/         /v3.0/                         │
+│            (images/video)   (SFX)          (music)                         │
+└───────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Core is the source of truth** — everything is drivable from the terminal (premise: the agent can edit/run/tweak everything).
-- Desktop (Tauri) shell planned (Track 7), wrapping the CLI as a sidecar — the Rust `deep-filter` binary is the natural fit.
+## Install
 
-## Status
+### From Git Bash:
+```bash
+bash install.sh
+```
 
-- **Fase 1** (`voxera enhance` happy-path CLI): ✅ complete — 70 tests, exit codes per spec.
-- **Model selection**: ✅ autoresearch verdict — **DeepFilterNet2 (pf=off) is the default**.
-- **Fase 2 — Track 0 (rename)**: ✅ `improve_my_sound`/`ims` → `voxera`.
-- **Fase 2 — Tracks 1A/1/1B (fundaciones + analyze/master)**: ✅ formatos, determinismo, device,
-  RTF, provenance, exit 20, presets, de-esser no-daño, heurísticas de voz.
-- **Fase 2 — Tracks 2/3/4/5**: ✅ `silence` (gaps+breaths+declick), `score` (CVS + voz preservada),
-  vídeo directo (bit-identical, AAC 192k), `restore` (declip/deplosive/dehum).
-- **Fase 2 — Track 6 (benchmark v2)**: ✅ `.auto/v2/` sintético ejecutado (DF2 pesq 3.07);
-  suite real esperando clips de Antonio en `.auto/v2/real/`.
-- **Fase 2 — Tracks 8/7 (humano + UI)**: ✅ A/B player + votos CSV + protocolo; UI thin en `ui/`
-  (servidor 127.0.0.1:8770). Tauri shell pendiente de toolchain Rust.
-- **Fase 3 — Vídeo (mejora vertical 9:16)**: ✅ `voxera video info/enhance/compare`, backend
-  Real-ESRGAN CUDA (default animevideov3, AB decidido), `--master-audio` (voz voxera + vídeo en
-  un comando), web UI con jobs asíncronos, tests 13/13, deliverables en `media/videos/enhanced/`.
-- **Pendiente humano**: clips reales (decisión #3) y escucha Track 8 (decisión #12).
-  Detalle: `docs/ROADMAP-fase2.md`.
+### From PowerShell:
+```powershell
+.\install.ps1
+```
 
-## Operations
+Both install (idempotent, junction preferred so repo edits propagate):
+1. `extension/` → `~/.pi/agent/extensions/pixabay/`
+2. `skills/stock-assets/` → `~/.agents/skills/stock-assets/`
 
-- Swarm: `./launch-swarm.sh` (four-pack on orca backend, agents on DeepSeek V4 Flash).
-- Stop: `bash swarmforge/scripts/close-swarm.sh`.
-- Autoresearch results: `.auto/log.jsonl` (Pareto cloud).
-- Acceptance: `bash acceptance/scripts/accept features` (o `python -m acceptance.pipeline features`).
+### Then:
+Restart pi or run `/reload` to activate the extension. Other harnesses pick up the skill on their next start.
+
+## Usage
+
+1. **Set up API keys** (required: Pixabay; optional: Freesound, Jamendo):
+   ```
+   /pixabay setup
+   ```
+   Or set environment variables: `PIXABAY_API_KEY`, `FREESOUND_TOKEN`, `JAMENDO_CLIENT_ID`.
+
+2. **Check status:**
+   ```
+   /pixabay status
+   ```
+
+3. **Ask for assets** — agents auto-invoke the skill and tools. Just ask:
+   - "Find me some sunset photos for a thumbnail"
+   - "Download a 1080p ocean video clip"
+   - "Search for rain sound effects under 5 seconds"
+   - "Find instrumental ambient music for a background track"
+
+## Tools (11)
+
+Exposed by the `pixabay` MCP server; agents see them as `pixabay_*`:
+
+| Tool | Provider | Description |
+|------|----------|-------------|
+| `pixabay_search_images` | Pixabay | Search images with filters (type, orientation, colors, category) |
+| `pixabay_search_videos` | Pixabay | Search videos with filters (video_type, category) |
+| `pixabay_get_image` | Pixabay | Get a single image by Pixabay ID |
+| `pixabay_get_video` | Pixabay | Get a single video by Pixabay ID |
+| `pixabay_download_image` | Pixabay | Download an image (preview/webformat/large/fullhd/original) locally |
+| `pixabay_download_video` | Pixabay | Download a video (tiny/small/medium/large) locally |
+| `pixabay_api_status` | All | Validate API keys and check rate limits for all providers |
+| `pixabay_search_sfx` | Freesound | Search sound effects with duration/license/sort filters |
+| `pixabay_download_sfx` | Freesound | Download a sound effect (hq/lq MP3 preview) locally |
+| `pixabay_search_music` | Jamendo | Search music (genre/tags/instrumental; `q` is title-only) |
+| `pixabay_download_music` | Jamendo | Download a music track (MP3) locally |
+
+## API Keys
+
+| Provider | Key | Where to get | Env var | Required |
+|----------|-----|--------------|---------|----------|
+| Pixabay | API key | https://pixabay.com/api/docs/ | `PIXABAY_API_KEY` | ✅ Yes |
+| Freesound | Token | https://freesound.org/apiv2/apply/ | `FREESOUND_TOKEN` | Optional |
+| Jamendo | Client ID | https://developer.jamendo.com | `JAMENDO_CLIENT_ID` | Optional |
+
+Keys are stored in `~/.pi/agent/pixabay-config.json`:
+```json
+{
+  "apiKey": "pixabay-key",
+  "freesoundToken": "freesound-token",
+  "jamendoClientId": "jamendo-client-id"
+}
+```
+
+## Notes
+
+- **Pixabay images/videos** are cached 24h per ToS; Freesound/Jamendo results are NOT cached
+- **Freesound** only provides preview MP3s (not original files) via API — preview URLs expire, resolved fresh by `pixabay_download_sfx`
+- **Jamendo** `q` searches track titles only — use `genre=` for styles, `tags=` for moods; search is flaky server-side (the server retries empty results automatically); downloads fall back to the streaming URL when `audio_download` is null
+- **Licensing:** Pixabay = free commercial use; Freesound/Jamendo = check per-sound/track CC license (`license` / `license_ccurl` fields)
+- **ToS compliance:** no bulk downloads, no hotlinking Pixabay URLs, respect rate limits
+
+## Files
+
+```
+pixabay/
+├── README.md                                   # This file
+├── install.sh                                  # Git Bash installer (extension + skill)
+├── install.ps1                                 # PowerShell installer (extension + skill)
+├── extension/
+│   ├── index.ts                                # pi extension (MCP provisioning, /pixabay command, prompt nudge)
+│   └── mcp-server/
+│       ├── pixabay_server.py                   # FastMCP stdio server (11 tools)
+│       ├── requirements.txt                    # Dependencies (documentation only)
+│       └── smoke_test.py                       # End-to-end smoke test
+└── skills/
+    └── stock-assets/                           # Shared skill (installed to ~/.agents/skills/)
+        ├── SKILL.md                            # Agent skill instructions (auto-invoked)
+        └── references/
+            └── api.md                          # Complete API reference (Pixabay + Freesound + Jamendo)
+```
+
+## Uninstall
+
+1. Remove the extension and skill junctions:
+   ```bash
+   rm -rf ~/.pi/agent/extensions/pixabay
+   rm -rf ~/.agents/skills/stock-assets
+   ```
+2. Remove the `pixabay` entry from `~/.pi/agent/mcp.json`
+3. Remove the config file (optional):
+   ```bash
+   rm ~/.pi/agent/pixabay-config.json
+   ```
