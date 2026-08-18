@@ -49,3 +49,6 @@ credentials.json
 
 # vídeos personales + deliverables de fase 3 (no van al repo)
 media/videos/
+
+# demo autopilot (artefactos generados — los mp4 del A/B no van al repo)
+demo/
