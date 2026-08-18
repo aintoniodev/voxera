@@ -1,0 +1,4 @@
+interface:
+  display_name: "Short-Form Metrics Insights"
+  short_description: "Analiza métricas y pide el siguiente dato"
+  default_prompt: "Usa $short-form-metrics-insights para analizar mis métricas de Shorts, Reels y TikTok y guiarme paso a paso."
