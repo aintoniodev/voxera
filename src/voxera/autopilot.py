@@ -893,7 +893,7 @@ def run_autopilot(
     input: str,
     output: str,
     *,
-    planner: str = "rule",
+    planner: str = "llm",
     words_json: str | None = None,
     llm_cmd: str | None = None,
     max_dur: float = 45.0,
@@ -905,7 +905,7 @@ def run_autopilot(
 ) -> dict:
     """Orquesta plan + ejecución. Devuelve manifest dict.
 
-    planner: "rule" o "llm"
+    planner: "llm" (default) o "rule"
     dry_run: solo devuelve manifest sin ejecutar (stages listados, spec shown)
     """
     if planner not in ("rule", "llm"):
@@ -934,17 +934,28 @@ def run_autopilot(
             # No speech detected — continue with empty words
             words = []
 
-    # Step 2: Plan
-    if planner == "rule":
-        spec = rule_plan(
-            words, max_dur=max_dur, level=level,
-            target_aspect=aspect, crf=crf, source=input,
-        )
-    else:
-        spec = llm_plan(
-            words, llm_cmd=llm_cmd, max_dur=max_dur,
-            level=level, source=input,
-        )
+    # Step 2: Plan (llm por defecto, fallback a reglas si falla)
+    spec: dict | None = None
+    try:
+        if planner == "rule":
+            spec = rule_plan(
+                words, max_dur=max_dur, level=level,
+                target_aspect=aspect, crf=crf, source=input,
+            )
+        else:
+            spec = llm_plan(
+                words, llm_cmd=llm_cmd, max_dur=max_dur,
+                level=level, source=input,
+            )
+    except EnhancementError:
+        if planner == "llm":
+            # Fallback: si el LLM falla, usar reglas
+            spec = rule_plan(
+                words, max_dur=max_dur, level=level,
+                target_aspect=aspect, crf=crf, source=input,
+            )
+        else:
+            raise
 
     if dry_run:
         # Build manifest without executing

@@ -1051,7 +1051,7 @@ def build_parser() -> argparse.ArgumentParser:
         "-o", "--output", required=True, help="salida .mp4"
     )
     apr.add_argument(
-        "--planner", choices=("rule", "llm"), default="rule",
+        "--planner", choices=("rule", "llm"), default="llm",
         help="planificador: rule (determinista, default) o llm",
     )
     apr.add_argument(

@@ -411,14 +411,14 @@ class TestIntegrationAB:
             str(src), prefix,
             planner_a="rule",
             planner_b="llm",
-            llm_cmd="comando-inexistente-xyz-123",  # fallará → failure aislado
+            llm_cmd="comando-inexistente-xyz-123",  # fallará → fallback a reglas
             max_dur=45.0,
             words_json=str(words_path),
         )
         # rule variant should succeed (words available for captions)
         assert ab_manifest["variants"]["rule"]["qa"]
-        # llm variant should have error
-        assert "error" in ab_manifest["variants"]["llm"]
+        # llm variant should fallback to rules and succeed
+        assert ab_manifest["variants"]["llm"]["qa"]
         # No crash
         assert len(ab_manifest["checklist"]) == 4
 
