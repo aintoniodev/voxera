@@ -28,6 +28,7 @@ video = [
     "realesrgan",
     "opencv-python",
     "numpy<2",
+    "faster-whisper",
 ]
 
 [project.scripts]

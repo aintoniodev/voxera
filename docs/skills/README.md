@@ -16,6 +16,7 @@ conocimiento en el repo para que viaje con el proyecto.
 | [voxera-audio-tonal.md](voxera-audio-tonal.md) | `src/voxera/audio_tonal.py` | Musicalidad tonal ("tell the people how to feel"): transición de emoción A→B, riser que acaba exacto en el corte, melodía generada bajo la voz; tabla de 8 moods (modo/raíz/timbre), verificación numérica (FFT de triadas, RMS cuartil del riser, notas ∈ escala, mix bit-exacto) |
 | [short-form-metrics-insights](../../plugins/short-form-metrics-insights/skills/short-form-metrics-insights/SKILL.md) | `plugins/short-form-metrics-insights` | Recopilación incremental y análisis de métricas de TikTok, Reels y Shorts; normalización, insights, outcomes, comparativas y siguientes preguntas |
 | [short-form-editing-science](../../plugins/short-form-editing-science/skills/short-form-editing-science/SKILL.md) | `plugins/short-form-editing-science` | Aplicación del informe científico a hooks, timeline, cortes, ritmo, estilos, efectos, captions, música, mezcla, variantes y QA |
+| [vertical-video/](vertical-video/) | `scripts/*.py` (propios, no en `src/`) | Producción de vídeo vertical 9:16 producto-final desde crudo (color, corte de silencios audio-first, subs kinéticos, stickers contextuales, punch-ins, tarjetas). Pipeline completo con scripts propios, glosario ASR persistente por serie, y validación numérica (validate.py). Incluye SKILL.md + scripts + references |
 
 Todas incluyen una sección **Reference Implementation** con el código
 núcleo (expresiones ffmpeg exactas, easing, máscaras, álgebra) para que
