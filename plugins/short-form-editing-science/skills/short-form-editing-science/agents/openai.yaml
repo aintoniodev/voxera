@@ -1,0 +1,4 @@
+interface:
+  display_name: "Short-Form Editing Science"
+  short_description: "Convierte evidencia en planes de edición"
+  default_prompt: "Usa $short-form-editing-science para convertir el informe científico en un plan de edición aplicable a mi vídeo."

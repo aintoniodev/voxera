@@ -1,0 +1,18 @@
+{
+  "name": "short-form-metrics-insights",
+  "version": "0.1.0",
+  "description": "Conversational analytics for TikTok, Instagram Reels and YouTube Shorts metrics, with incremental data collection, normalized comparisons, insights, outcomes and next-step questions.",
+  "author": {
+    "name": "Local developer"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Short Form Metrics Insights",
+    "shortDescription": "Analyze short-form metrics step by step.",
+    "longDescription": "Analyze pasted or local platform metrics, ask for missing data incrementally, normalize rates, surface insights and outcomes, and plan the next test.",
+    "developerName": "Local developer",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Analyze my TikTok, Reels or Shorts metrics and ask me for the next missing data block."
+  }
+}
