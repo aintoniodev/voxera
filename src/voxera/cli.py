@@ -872,6 +872,21 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"velocidad de lectura (default {captions.DEFAULT_CHARS_PER_SEC})",
     )
     vcap.add_argument(
+        "--es-variant", choices=captions.ES_VARIANTS, default=None,
+        help="variante de español (es-ES: decimales con coma; "
+        "es-LATAM: punto y hora a. m./p. m.)",
+    )
+    vcap.add_argument(
+        "--hook", action="append", default=None, metavar="TEXTO@ANCLA[@DUR]",
+        help="hook de texto arriba (≤4 palabras, 0.8–2.0 s, MAYÚSCULAS), "
+        "anclado a una palabra del transcript (sincronía con el audio); "
+        "repetible; DUR opcional en segundos",
+    )
+    vcap.add_argument(
+        "--strict-qa", action="store_true",
+        help="abortar si algún cue supera el límite de lectura (20 cps)",
+    )
+    vcap.add_argument(
         "--highlight", default="",
         help="palabras a resaltar en naranja (separadas por coma)",
     )
@@ -1907,7 +1922,20 @@ def _cmd_video(args) -> int:
 
     if args.video_command == "captions":
         hl = tuple(h.strip() for h in args.highlight.split(',') if h.strip()) if args.highlight else ()
+        hooks = []
         try:
+            for h in (args.hook or []):
+                parts = h.split("@")
+                if len(parts) == 2:
+                    text, anchor, dur = parts[0], parts[1], None
+                elif len(parts) == 3:
+                    text, anchor, dur = parts[0], parts[1], parts[2]
+                    dur = float(dur) if dur.strip() else None
+                else:
+                    raise EnhancementError(
+                        f"--hook formato TEXTO@ANCLA[@DUR], got {h!r}"
+                    )
+                hooks.append({"text": text.strip(), "anchor": anchor.strip(), "dur": dur})
             if args.dry_run:
                 print(captions.build_plan(
                     args.input,
@@ -1920,6 +1948,8 @@ def _cmd_video(args) -> int:
                     max_lines=args.max_lines,
                     chars_per_sec=args.chars_per_sec,
                     highlight=hl,
+                    es_variant=args.es_variant,
+                    hooks=hooks,
                     words_json=args.words_json,
                     ass_only=args.ass_only,
                     crf=args.crf,
@@ -1938,6 +1968,9 @@ def _cmd_video(args) -> int:
                 max_lines=args.max_lines,
                 chars_per_sec=args.chars_per_sec,
                 highlight=hl,
+                es_variant=args.es_variant,
+                hooks=hooks,
+                strict_qa=args.strict_qa,
                 ass_only=args.ass_only,
                 crf=args.crf,
                 audio_bitrate=args.audio_bitrate,

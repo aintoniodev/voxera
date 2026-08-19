@@ -59,6 +59,22 @@ def _words_punct() -> list[dict]:
     ]
 
 
+def _words_two_line() -> list[dict]:
+    """Frase que se parte tras puntuación en dos líneas de ≤25 chars:
+    'Esto es bastante largo.' (20) + 'y aquí sigue la frase' (17)."""
+    return [
+        {"w": "Esto", "s": 0.00, "e": 0.30},
+        {"w": "es", "s": 0.35, "e": 0.60},
+        {"w": "bastante", "s": 0.65, "e": 1.00},
+        {"w": "largo.", "s": 1.05, "e": 1.40},
+        {"w": "y", "s": 1.45, "e": 1.60},
+        {"w": "aquí", "s": 1.65, "e": 1.95},
+        {"w": "sigue", "s": 2.00, "e": 2.30},
+        {"w": "la", "s": 2.35, "e": 2.50},
+        {"w": "frase", "s": 2.55, "e": 2.90},
+    ]
+
+
 def _words_empty() -> list[dict]:
     return []
 
@@ -255,6 +271,287 @@ class TestWordsToCues:
         # chars_per_sec muy bajo → cada palabra en su propio cue
         cues = cap.words_to_cues(words, chars_per_sec=1.0)
         assert len(cues) >= 2
+
+
+# ---------------------------------------------------------------------------
+# Tests: segmentación sintáctica (Síntesis Theme 2)
+# ---------------------------------------------------------------------------
+
+class TestSegmentation:
+    """Reglas negativas y cortes preferidos (BBC/Netflix)."""
+
+    def test_bad_break_after_article(self):
+        """Nunca partir artículo+nombre."""
+        assert cap._bad_break({"w": "el"}, {"w": "gato"})
+        assert cap._bad_break({"w": "una"}, {"w": "idea"})
+
+    def test_bad_break_after_preposition(self):
+        """Nunca dejar una preposición colgando al final de línea."""
+        assert cap._bad_break({"w": "para"}, {"w": "ti"})
+        assert cap._bad_break({"w": "con"}, {"w": "migo"})
+
+    def test_bad_break_after_auxiliary(self):
+        """Nunca separar auxiliar/negación del verbo."""
+        assert cap._bad_break({"w": "no"}, {"w": "quiero"})
+        assert cap._bad_break({"w": "he"}, {"w": "visto"})
+
+    def test_bad_break_name_surname(self):
+        """Nunca partir nombre+apellido (heurística de capitalizadas)."""
+        assert cap._bad_break({"w": "Juan"}, {"w": "Pérez"})
+
+    def test_good_break_after_punctuation(self):
+        """Corte preferido tras puntuación."""
+        assert cap._good_break({"w": "días."}, {"w": "Hoy"})
+
+    def test_good_break_before_conjunction(self):
+        """Corte preferido antes de conjunciones."""
+        assert cap._good_break({"w": "pan"}, {"w": "y"})
+        assert cap._good_break({"w": "vino"}, {"w": "pero"})
+
+    def test_good_break_before_preposition(self):
+        """Corte preferido antes de preposiciones."""
+        assert cap._good_break({"w": "ir"}, {"w": "para"})
+
+    def test_pause_over_half_second_breaks(self):
+        """Una pausa real (≥0.5 s) separa cues aunque la línea no esté llena
+        (BBC: hueco ≥1 s si hay pausa; Netflix: chaining solo 3–11 frames)."""
+        words = [
+            {"w": "Hola", "s": 0.0, "e": 0.30},
+            {"w": "mundo", "s": 0.9, "e": 1.20},   # pausa 0.6 s
+            {"w": "otra", "s": 1.25, "e": 1.50},
+        ]
+        cues = cap.words_to_cues(words, chars_per_sec=18.0)
+        assert len(cues) == 2
+        assert [w["w"] for w in cues[0]] == ["Hola"]
+        assert [w["w"] for w in cues[1]] == ["mundo", "otra"]
+
+    def test_small_gap_stays_joined(self):
+        """Huecos pequeños (<0.5 s) no separan."""
+        words = [
+            {"w": "Hola", "s": 0.0, "e": 0.30},
+            {"w": "mundo", "s": 0.35, "e": 0.70},
+        ]
+        cues = cap.words_to_cues(words, chars_per_sec=18.0)
+        assert len(cues) == 1
+
+    def test_backtrack_keeps_article_noun_together(self):
+        """Si el corte caería tras un artículo, se retrocede al último buen
+        punto (antes de la conjunción) y artículo+nombre quedan juntos."""
+        words = [
+            {"w": "Hola,", "s": 0.00, "e": 0.20},
+            {"w": "y", "s": 0.25, "e": 0.30},
+            {"w": "el", "s": 0.35, "e": 0.45},
+            {"w": "gato", "s": 0.50, "e": 0.60},
+            {"w": "duerme", "s": 0.65, "e": 1.00},
+        ]
+        cues = cap.words_to_cues(words, chars_per_sec=10.0)
+        flat = [[w["w"] for w in line] for line in cues]
+        # El artículo y su nombre nunca se separan
+        for line in flat:
+            assert not any(line[i] == "el" and line[i + 1] != "gato" for i in range(len(line) - 1))
+        # El corte preferido cae antes de la conjunción "y"
+        assert flat[0] == ["Hola,"]
+        assert "y" in flat[1]
+
+
+# ---------------------------------------------------------------------------
+# Tests: agrupación a 2 líneas (Síntesis Theme 2 — Li 2026)
+# ---------------------------------------------------------------------------
+
+class TestTwoLines:
+    """Dos líneas = punto dulce de atención en vertical."""
+
+    def test_group_merges_medium_cues(self):
+        """Dos cues medianos (≤25 chars c/u, corte tras puntuación) se
+        agrupan en un evento de 2 líneas."""
+        words = _words_two_line()
+        events = cap._build_events(words, max_lines=3, chars_per_sec=18.0, two_lines=True)
+        # ['Esto es bastante largo.' (20) + 'y aquí sigue la frase' (17)]
+        assert len(events) == 1
+        assert len(events[0]) == 2  # dos líneas en un evento
+        assert events[0][0][-1]["w"] == "largo."
+        assert events[0][1][0]["w"] == "y"
+
+    def test_renders_newline_separator(self):
+        """El evento de 2 líneas usa \\N en el texto ASS."""
+        ass = cap.build_ass(_words_two_line())
+        dialogue = [l for l in ass.split("\n") if l.startswith("Dialogue:")]
+        assert len(dialogue) == 1
+        assert "\\N" in dialogue[0]
+
+    def test_disabled_with_max_lines_1(self):
+        """max_lines=1 desactiva la agrupación."""
+        ass = cap.build_ass(_words_two_line(), max_lines=1)
+        dialogue = [l for l in ass.split("\n") if l.startswith("Dialogue:")]
+        assert len(dialogue) == 2
+
+    def test_no_group_across_bad_break(self):
+        """No se agrupan cues cuya frontera rompería artículo+nombre."""
+        words = [
+            {"w": "Hola", "s": 0.00, "e": 0.30},
+            {"w": "el", "s": 0.35, "e": 0.50},
+            {"w": "gato", "s": 0.55, "e": 0.90},
+        ]
+        events = cap._build_events(words, max_lines=3, chars_per_sec=2.0, two_lines=True)
+        # Con cps bajo cada palabra va a su propia línea; ninguna frontera
+        # (el|gato) es sintácticamente buena → no hay eventos de 2 líneas.
+        assert all(len(ev) == 1 for ev in events)
+        assert [w["w"] for ev in events for w in ev[0]] == ["Hola", "el", "gato"]
+
+
+# ---------------------------------------------------------------------------
+# Tests: hooks de texto arriba (Síntesis Theme 5)
+# ---------------------------------------------------------------------------
+
+class TestHooks:
+    """Primitivo hook: ≤4 palabras, 0.8–2.0 s, ancla al transcript."""
+
+    def test_resolve_anchor_after(self):
+        """El hook arranca 0.1 s tras el final de la palabra ancla."""
+        words = _words_simple()  # 'mundo' s=0.90 e=1.30
+        hooks = cap.resolve_hooks(words, [{"text": "Espera", "anchor": "mundo"}])
+        assert len(hooks) == 1
+        assert abs(hooks[0]["start"] - 1.40) < 1e-9
+        assert abs(hooks[0]["end"] - (1.40 + cap.HOOK_DEFAULT_DUR)) < 1e-9
+
+    def test_duration_clamped(self):
+        """Duración fuera de [0.8, 2.0] se clampa."""
+        words = _words_simple()
+        long = cap.resolve_hooks(words, [{"text": "X", "anchor": "mundo", "dur": 5.0}])
+        short = cap.resolve_hooks(words, [{"text": "X", "anchor": "mundo", "dur": 0.1}])
+        assert long[0]["end"] - long[0]["start"] <= cap.HOOK_MAX_DUR
+        assert short[0]["end"] - short[0]["start"] >= cap.HOOK_MIN_DUR
+
+    def test_text_too_long_raises(self):
+        """Más de 4 palabras → EnhancementError."""
+        with pytest.raises(EnhancementError, match="4 palabras"):
+            cap.resolve_hooks(_words_simple(), [{"text": "uno dos tres cuatro cinco", "anchor": "mundo"}])
+
+    def test_missing_anchor_raises(self):
+        """Palabra ancla ausente → EnhancementError."""
+        with pytest.raises(EnhancementError, match="ancla"):
+            cap.resolve_hooks(_words_simple(), [{"text": "Ojo", "anchor": "inexistente"}])
+
+    def test_renders_hook_style_and_caps(self):
+        """El hook usa estilo Hook, \\an8 (arriba-centro) y MAYÚSCULAS."""
+        words = _words_simple()
+        ass = cap.build_ass(words, hooks=[{"text": "Ojo", "anchor": "mundo"}])
+        assert "Style: Hook" in ass
+        assert "\\an8" in ass
+        assert "OJO" in ass
+        assert "Dialogue: 2," in ass
+
+    def test_hook_dropped_over_wide_cue(self):
+        """Hook que solapa un evento de 2 líneas se descarta con nota."""
+        notes: list = []
+        # _words_two_line se agrupa en un evento de 2 líneas (37 chars) que
+        # abarca 0..2.9; el hook anclado a 'largo' (e=1.40) lo solapa.
+        ass = cap.build_ass(_words_two_line(), hooks=[{"text": "Ojo", "anchor": "largo"}], notes=notes)
+        assert any("descartado" in n for n in notes)
+        assert "OJO" not in ass
+
+    def test_hook_dropped_over_hook(self):
+        """Dos hooks simultáneos → el segundo se descarta."""
+        notes: list = []
+        hooks = [
+            {"text": "Uno", "anchor": "mundo", "dur": 2.0},
+            {"text": "Dos", "anchor": "mundo", "dur": 2.0},
+        ]
+        cap.build_ass(_words_simple(), hooks=hooks, notes=notes)
+        assert any("descartado" in n for n in notes)
+
+
+# ---------------------------------------------------------------------------
+# Tests: variante de español (Síntesis Theme 6 — Netflix ES)
+# ---------------------------------------------------------------------------
+
+class TestEsVariant:
+    """Ajustes regionales es-ES / es-LATAM."""
+
+    def test_es_es_decimal_comma(self):
+        """es-ES: decimales con coma (3.5 → 3,5)."""
+        words = [{"w": "3.5", "s": 0.0, "e": 0.40}]
+        ass = cap.build_ass(words, es_variant="es-ES")
+        assert "3,5" in ass
+        assert "3.5" not in ass
+
+    def test_es_latam_decimal_point(self):
+        """es-LATAM: decimales con punto (3,5 → 3.5)."""
+        words = [{"w": "3,5", "s": 0.0, "e": 0.40}]
+        ass = cap.build_ass(words, es_variant="es-LATAM")
+        assert "3.5" in ass
+
+    def test_es_latam_time_ampm(self):
+        """es-LATAM: hora 24h → a. m./p. m."""
+        words = [{"w": "14:00", "s": 0.0, "e": 0.40}, {"w": "9:30", "s": 0.5, "e": 0.9}]
+        ass = cap.build_ass(words, es_variant="es-LATAM")
+        assert "2:00 p. m." in ass
+        assert "9:30 a. m." in ass
+
+    def test_invalid_variant_raises(self):
+        """Variante inválida → EnhancementError."""
+        with pytest.raises(EnhancementError, match="es_variant"):
+            cap.build_ass(_words_simple(), es_variant="es-MX")
+
+    def test_playful_keeps_inverted_marks(self):
+        """playful + es nunca elimina ¿/¡ (obligatorios en español)."""
+        words = [
+            {"w": "¿Qué", "s": 0.0, "e": 0.30},
+            {"w": "pasa?", "s": 0.4, "e": 0.70},
+        ]
+        ass = cap.build_ass(words, text_style="playful", es_variant="es-ES")
+        assert "¿qué" in ass
+        assert "pasa?" in ass
+
+
+# ---------------------------------------------------------------------------
+# Tests: QA de lectura (Síntesis §7 CAMBIO 1)
+# ---------------------------------------------------------------------------
+
+class TestAuditCues:
+    """Auditoría cps por cue y duración mínima."""
+
+    def _events(self, words):
+        return cap._build_events(words, max_lines=3, chars_per_sec=18.0, two_lines=True)
+
+    def test_fast_cue_fails(self):
+        """Cue muy rápido (>20 cps) → severidad fail."""
+        words = [
+            {"w": "palabra", "s": 0.0, "e": 0.20},
+            {"w": "larguísima", "s": 0.22, "e": 0.45},
+        ]
+        issues = cap.audit_cues(self._events(words))
+        assert any(i["severity"] == "fail" for i in issues)
+
+    def test_slow_cue_clean(self):
+        """Cue a ritmo natural → sin issues."""
+        words = [
+            {"w": "Hola", "s": 0.5, "e": 0.83},
+            {"w": "mundo", "s": 0.9, "e": 1.35},
+        ]
+        assert cap.audit_cues(self._events(words)) == []
+
+    def test_short_cue_warns(self):
+        """Cue < 0.83 s → warn de duración mínima."""
+        words = [{"w": "hola", "s": 0.0, "e": 0.30}]
+        issues = cap.audit_cues(self._events(words))
+        assert any(i["severity"] == "warn" and "0.83" in i["message"] for i in issues)
+
+    def test_warn_below_fail(self):
+        """Cue entre 18 y 20 cps → warn, no fail."""
+        words = [
+            {"w": "texto", "s": 0.0, "e": 0.18},
+            {"w": "rápido", "s": 0.20, "e": 0.40},
+        ]
+        # chars=11, dur=0.4 → 27.5 cps → fail; ajustamos a un caso warn:
+        words = [
+            {"w": "texto", "s": 0.0, "e": 0.30},
+            {"w": "rápido", "s": 0.32, "e": 0.62},
+        ]
+        issues = cap.audit_cues(self._events(words))
+        sevs = {i["severity"] for i in issues}
+        assert "warn" in sevs
+        assert "fail" not in sevs
 
 
 # ---------------------------------------------------------------------------
@@ -500,3 +797,32 @@ class TestIntegration:
         ass_s = (tmp_path / "s.ass").read_text(encoding="utf-8")
         assert "\\k" not in ass_s
         assert "\\fad(80,80)" in ass_s
+
+    def test_hooks_in_pipeline(self, tmp_path: Path):
+        """La pipeline acepta hooks y los refleja en el ASS."""
+        vid = self._make_test_video(tmp_path)
+        words_json = self._make_words_json(tmp_path)
+        ass_out = tmp_path / "hooks.ass"
+        cap.captions_video(
+            str(vid), str(tmp_path / "unused.mp4"),
+            words_json=str(words_json),
+            hooks=[{"text": "Ojo", "anchor": "mundo"}],
+            ass_only=str(ass_out),
+        )
+        content = ass_out.read_text(encoding="utf-8")
+        assert "Style: Hook" in content
+        assert "OJO" in content
+
+    def test_strict_qa_aborts(self, tmp_path: Path):
+        """strict_qa aborta si algún cue supera el límite de lectura."""
+        vid = self._make_test_video(tmp_path)
+        wp = tmp_path / "fast.json"
+        wp.write_text(json.dumps({"words": [
+            {"w": "palabra", "s": 0.10, "e": 0.20},
+            {"w": "larguísima", "s": 0.22, "e": 0.35},
+        ]}), encoding="utf-8")
+        with pytest.raises(EnhancementError, match="QA estricto"):
+            cap.captions_video(
+                str(vid), str(tmp_path / "out.mp4"),
+                words_json=str(wp), strict_qa=True,
+            )
