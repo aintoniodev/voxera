@@ -30,6 +30,7 @@ from voxera import video as video_mod
 from voxera import video_enhance
 from voxera import video_zoom
 from voxera import video_teleport
+from voxera import video_levitate
 from voxera import video_magnify
 from voxera import video_silence
 from voxera import video_stabilize
@@ -502,6 +503,116 @@ def build_parser() -> argparse.ArgumentParser:
         help="imprimir el plan y salir sin escribir nada",
     )
 
+    vlev = vsub.add_parser(
+        "levitate",
+        help="efecto levitación: congela un sujeto y lo hace flotar hacia arriba",
+        description="Replicación del efecto levitación del tutorial de @serri.mp4: "
+        "cámara fija, el sujeto se CONGELA en --at (frame hold), se recorta "
+        "por segmentación y se eleva flotando sobre el fondo real (plate reconstruido "
+        "con nanmedian + LaMa, o un --plate externo). Funciona con una persona "
+        "o con cualquier objeto mediante --subject object/--mask. Subida con curva "
+        "de easing, trayectoria configurable (--move/--rotate/--scale), balanceo "
+        "y deriva opcionales (--bob/--motion drift), y sombra blanda opcional (--shadow).",
+    )
+    vlev.add_argument("input", help="vídeo de entrada (cámara fija en trípode)")
+    vlev.add_argument("-o", "--output", required=True, help="salida .mp4")
+    vlev.add_argument(
+        "--at", type=float, required=True,
+        help="instante del frame hold en segundos (pico del salto o momento del objeto)",
+    )
+    vlev.add_argument(
+        "--subject", choices=video_levitate.LEVITATE_SUBJECTS,
+        default=video_levitate.DEFAULT_SUBJECT,
+        help="sujeto a recortar: auto (default), person u object",
+    )
+    vlev.add_argument(
+        "--mask", default=None,
+        help="máscara externa blanca/negra alineada con el frame de --at (sirve para cualquier objeto)",
+    )
+    vlev.add_argument(
+        "--lift", type=float, default=video_levitate.DEFAULT_LIFT,
+        help=f"%% de la altura que sube el sujeto (default {video_levitate.DEFAULT_LIFT:g})",
+    )
+    vlev.add_argument(
+        "--dur", type=float, default=video_levitate.DEFAULT_DUR,
+        help=f"duración de la subida en s (default {video_levitate.DEFAULT_DUR:g})",
+    )
+    vlev.add_argument(
+        "--bob", type=float, default=video_levitate.DEFAULT_BOB,
+        help=f"balanceo vertical al flotar como %% de la altura (default {video_levitate.DEFAULT_BOB:g}; "
+        f"0 = flotar quieto; periodo {video_levitate.BOB_PERIOD_S:g}s)",
+    )
+    vlev.add_argument(
+        "--motion", "--movement", dest="motion", choices=video_levitate.LEVITATE_MOTIONS,
+        default=video_levitate.DEFAULT_MOTION,
+        help="static (sin vaivén) | float (default, subida + bob) | "
+        "drift (subida + sway lateral)",
+    )
+    vlev.add_argument(
+        "--move", default="0,0", metavar="DX,DY",
+        help="desplazamiento final adicional en %% de ancho/alto (+x derecha, +y abajo; default 0,0)",
+    )
+    vlev.add_argument(
+        "--keyframes", default=None,
+        metavar="P:X,Y[,ROT[,SCALE]];...",
+        help="trayectoria por puntos; p 0-1, x/y en %% desde la pose congelada "
+             "(reemplaza lift/move/rotate/scale; ej. '0:0,0;0.5:4,-8,3,5;1:8,-15,6,10')",
+    )
+    vlev.add_argument(
+        "--rotate", type=float, default=video_levitate.DEFAULT_ROTATE,
+        help=f"giro final del sujeto en grados (default {video_levitate.DEFAULT_ROTATE:g})",
+    )
+    vlev.add_argument(
+        "--scale", type=float, default=video_levitate.DEFAULT_SCALE,
+        help=f"cambio de escala final en %% (+ crece, - encoge; default {video_levitate.DEFAULT_SCALE:g})",
+    )
+    vlev.add_argument(
+        "--sway", type=float, default=video_levitate.DEFAULT_SWAY,
+        help=f"amplitud del vaivén lateral en %% del ancho, solo drift (default {video_levitate.DEFAULT_SWAY:g})",
+    )
+    vlev.add_argument(
+        "--sway-period", type=float, default=video_levitate.DEFAULT_SWAY_PERIOD,
+        help=f"periodo del vaivén lateral en s (default {video_levitate.DEFAULT_SWAY_PERIOD:g})",
+    )
+    vlev.add_argument(
+        "--curve", type=float, default=video_levitate.DEFAULT_CURVE,
+        help=f"curva de easing 0-100 de la subida (default {video_levitate.DEFAULT_CURVE:g}; 0 = lineal)",
+    )
+    vlev.add_argument(
+        "--easing", choices=video_levitate.LEVITATE_EASINGS, default=video_levitate.DEFAULT_EASING,
+        help="smooth (default, S-curva) | out (arranca rápido) | in (acelera) | linear",
+    )
+    vlev.add_argument(
+        "--plate", default=None,
+        help="plate de fondo externo (imagen o vídeo; recomendado si el objeto no se mueve)",
+    )
+    vlev.add_argument(
+        "--plate-samples", type=int, default=video_levitate.DEFAULT_PLATE_SAMPLES,
+        help=f"frames muestreados para reconstruir el fondo (default {video_levitate.DEFAULT_PLATE_SAMPLES})",
+    )
+    vlev.add_argument(
+        "--feather", type=float, default=video_levitate.DEFAULT_FEATHER,
+        help=f"px de suavizado del borde del recorte (default {video_levitate.DEFAULT_FEATHER:g})",
+    )
+    vlev.add_argument(
+        "--shadow", action="store_true",
+        help="dibujar una sombra blanda bajo el sujeto que se encoge al subir",
+    )
+    vlev.add_argument(
+        "--shadow-strength", type=float, default=video_levitate.DEFAULT_SHADOW_STRENGTH,
+        help=f"opacidad de la sombra 0-1 (default {video_levitate.DEFAULT_SHADOW_STRENGTH:g})",
+    )
+    vlev.add_argument(
+        "--crf", type=int, default=18,
+        help="x264 CRF (default 18; más alto = fichero más pequeño)",
+    )
+    vlev.add_argument(
+        "--audio-bitrate", default="192k", help="AAC bitrate (default 192k)",
+    )
+    vlev.add_argument(
+        "--dry-run", action="store_true",
+        help="imprimir el plan y salir sin escribir nada",
+    )
 
     vmag = vsub.add_parser(
         "magnify",
@@ -1590,6 +1701,52 @@ def _cmd_video(args) -> int:
                 print(video_teleport.build_plan(args.input, opts))
                 return 0
             out = video_teleport.teleport_video(args.input, args.output, opts)
+        except EnhancementError as exc:
+            print(f"{PROG}: error: {exc}", file=sys.stderr)
+            return 1
+        print(f"✓ {out}")
+        return 0
+
+    if args.video_command == "levitate":
+        try:
+            move_x, move_y = video_levitate.parse_move(args.move)
+            keyframes = (
+                video_levitate.parse_keyframes(args.keyframes)
+                if args.keyframes else None
+            )
+        except ValueError as exc:
+            print(f"{PROG}: error: {exc}", file=sys.stderr)
+            return 2
+        opts = video_levitate.LevitateOptions(
+            at=args.at,
+            lift=args.lift,
+            dur=args.dur,
+            bob=args.bob,
+            curve=args.curve,
+            easing=args.easing,
+            plate=args.plate,
+            plate_samples=args.plate_samples,
+            feather=args.feather,
+            shadow=args.shadow,
+            shadow_strength=args.shadow_strength,
+            crf=args.crf,
+            audio_bitrate=args.audio_bitrate,
+            subject=args.subject,
+            mask=args.mask,
+            motion=args.motion,
+            move_x=move_x,
+            move_y=move_y,
+            rotate=args.rotate,
+            scale=args.scale,
+            sway=args.sway,
+            sway_period=args.sway_period,
+            keyframes=keyframes,
+        )
+        try:
+            if args.dry_run:
+                print(video_levitate.build_plan(args.input, opts))
+                return 0
+            out = video_levitate.levitate_video(args.input, args.output, opts)
         except EnhancementError as exc:
             print(f"{PROG}: error: {exc}", file=sys.stderr)
             return 1

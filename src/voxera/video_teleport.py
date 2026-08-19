@@ -38,7 +38,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from scipy.ndimage import binary_erosion, distance_transform_edt, gaussian_filter
+from scipy.ndimage import (
+    binary_closing,
+    binary_erosion,
+    binary_fill_holes,
+    binary_opening,
+    distance_transform_edt,
+    gaussian_filter,
+    label,
+)
 
 from voxera import video as video_mod
 from voxera import video_enhance as ve
@@ -49,6 +57,7 @@ DEFAULT_SHIFT = "-25,0"       # dx,dy en % del ancho/alto — reaparece a la izq
 DEFAULT_DILATE = 3            # px de dilatación de la silueta (escala 720p)
 DEFAULT_PLATE_SAMPLES = 24    # frames muestreados para el plate de fondo
 DEFAULT_DIFF_THRESHOLD = 25   # umbral del fallback diff (sin torch)
+DEFAULT_OBJECT_DIFF_THRESHOLD = 18  # umbral base para sujetos no humanos
 ERASE_DILATE = 4              # px extra de dilatación al borrar (mata halos)
 PERSON_CLASS = 15             # VOC labels en los pesos COCO_WITH_VOC_LABELS de torchvision
 WHITE = np.array([255, 255, 255], dtype=np.uint8)
@@ -245,6 +254,44 @@ def person_mask(frame: np.ndarray, dilate: int = DEFAULT_DILATE) -> np.ndarray:
     return _dilate_radius(m, dilate_px)
 
 
+def object_mask(
+    frame: np.ndarray,
+    background: np.ndarray,
+    threshold: float = DEFAULT_OBJECT_DIFF_THRESHOLD,
+) -> np.ndarray:
+    """Máscara de un sujeto arbitrario comparando el frame con un plate.
+
+    No presupone la clase semántica del sujeto: sirve para una caja, juguete,
+    mascota, herramienta o cualquier objeto que se mueva ante una cámara fija.
+    ``background`` debe ser un plate limpio o la mediana temporal de la toma.
+    La limpieza morfológica elimina ruido de compresión y componentes diminutos.
+    """
+    if frame.shape[:2] != background.shape[:2]:
+        raise ValueError("frame y background deben tener la misma resolución")
+    diff = np.max(
+        np.abs(frame.astype(np.int16) - background.astype(np.int16)), axis=2
+    ).astype(np.float32)
+    median = float(np.median(diff))
+    mad = float(np.median(np.abs(diff - median)))
+    cutoff = max(float(threshold), median + 4.0 * max(mad, 1.0))
+    mask = diff > cutoff
+
+    # El radio escala con la resolución: no borra un objeto pequeño en 180p
+    # ni deja dientes de compresión en 1080p.
+    radius = max(1, int(round(max(frame.shape[:2]) / 720.0)))
+    mask = binary_closing(mask, iterations=radius)
+    mask = binary_opening(mask, iterations=max(1, radius // 2))
+    mask = binary_fill_holes(mask)
+
+    labels, count = label(mask)
+    if count:
+        areas = np.bincount(labels.reshape(-1))[1:]
+        min_area = max(16, int(frame.shape[0] * frame.shape[1] * 0.00002))
+        keep = np.flatnonzero(areas >= min_area) + 1
+        mask = np.isin(labels, keep)
+    return mask.astype(bool)
+
+
 def composite_silhouette(frame: np.ndarray, mask: np.ndarray) -> np.ndarray:
     """Rellena la región de la máscara con blanco opaco (Tinción 100 %)."""
     out = frame.copy()
@@ -325,29 +372,53 @@ def _grab_frame(input: Path, t: float, w: int, h: int) -> np.ndarray | None:
     return np.frombuffer(p.stdout, dtype=np.uint8).reshape(h, w, 3)
 
 
-def build_plate(input: str | Path, samples: int = DEFAULT_PLATE_SAMPLES) -> tuple[np.ndarray, str]:
-    """Plate de fondo sin persona: nanmedian consciente de persona + inpaint.
+def build_plate(
+    input: str | Path,
+    samples: int = DEFAULT_PLATE_SAMPLES,
+    subject: str = "person",
+) -> tuple[np.ndarray, str]:
+    """Construye un plate para una persona o para un objeto arbitrario.
+
+    ``subject='person'`` conserva la segmentación DeepLabV3 original.
+    ``subject='object'`` estima una mediana temporal y detecta lo que cambia
+    contra ella; ``'auto'`` usa DeepLab cuando encuentra una persona y cae a
+    esa detección genérica cuando no la encuentra.
 
     Devuelve (plate uint8 HxWx3, engine). Engine: 'lama' | 'telea' | 'edt'.
     """
+    if subject not in {"person", "object", "auto"}:
+        raise ValueError(f"subject debe ser 'person', 'object' o 'auto', got {subject!r}")
     inp = Path(input)
     probe = ve.probe_video(inp)
     w, h, dur = probe["width"], probe["height"], probe["duration_s"]
     n = max(2, min(samples, max(int(round(dur * probe["fps"])), 2)))
     times = np.linspace(min(0.5, dur / 2), dur - min(0.5, dur / 4), n)
 
-    frames, masks = [], []
+    frames = []
     for t in times:
         fr = _grab_frame(inp, float(t), w, h)
-        if fr is None:
-            continue
-        frames.append(fr)
-        masks.append(person_mask(fr, dilate=0))
+        if fr is not None:
+            frames.append(fr)
     if not frames:
         raise EnhancementError(f"no se pudo muestrear ni un frame de {inp}")
 
-    stack = np.stack(frames).astype(np.float32)
-    masks = np.stack(masks)
+    stack_u8 = np.stack(frames)
+    if subject == "object" or (subject == "auto" and not _torch_available()):
+        # Sin torch no hay clasificación semántica: el fallback genérico es
+        # más honesto y funciona igual para personas y objetos.
+        reference = np.median(stack_u8, axis=0).astype(np.uint8)
+        masks = np.stack([object_mask(fr, reference) for fr in frames])
+    else:
+        person_masks = np.stack([person_mask(fr, dilate=0) for fr in frames])
+        if subject == "person" or person_masks.any():
+            masks = person_masks
+        else:
+            # DeepLab puede no reconocer una caja, una mascota o un objeto
+            # abstracto: la mediana temporal permite continuar sin clase VOC.
+            reference = np.median(stack_u8, axis=0).astype(np.uint8)
+            masks = np.stack([object_mask(fr, reference) for fr in frames])
+
+    stack = stack_u8.astype(np.float32)
     stack_nan = stack.copy()
     stack_nan[masks] = np.nan
     with np.errstate(all="ignore"):
