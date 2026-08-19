@@ -50,5 +50,13 @@ credentials.json
 # vídeos personales + deliverables de fase 3 (no van al repo)
 media/videos/
 
+# demos de captions generados (ASS/HTML/mp4) y renders sueltos
+media/demo-captions/
+media/EntropyCollapseScene_cfr.mp4
+
 # demo autopilot (artefactos generados — los mp4 del A/B no van al repo)
 demo/
+
+# estado local de tooling (Freebuff / agentes)
+.agents/
+.freebuff/
