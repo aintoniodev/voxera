@@ -138,6 +138,81 @@ class TestValidateEditSpec:
         with pytest.raises(EnhancementError, match="falta"):
             validate_edit_spec(spec)
 
+    def test_captions_hooks_valid(self):
+        """hooks [{text, anchor, dur?}] válidos pasan y se conservan."""
+        from voxera.autopilot import validate_edit_spec
+        spec = _canonical_spec(captions={
+            "enabled": True,
+            "style": "karaoke",
+            "text_style": "classic",
+            "highlight": [],
+            "hooks": [
+                {"text": "¿LO SABÍAS?", "anchor": "Hola", "dur": 0.9},
+                {"text": "PERO OJO", "anchor": "mundo"},
+            ],
+            "es_variant": "es-ES",
+        })
+        result = validate_edit_spec(spec)
+        assert result["captions"]["hooks"][0]["text"] == "¿LO SABÍAS?"
+        assert result["captions"]["hooks"][0]["dur"] == 0.9
+        assert result["captions"]["hooks"][1]["anchor"] == "mundo"
+        assert result["captions"]["es_variant"] == "es-ES"
+
+    def test_captions_hooks_missing_anchor(self):
+        """hook sin anchor → error."""
+        from voxera.autopilot import validate_edit_spec
+        spec = _canonical_spec(captions={
+            "enabled": True, "style": "karaoke", "text_style": "classic",
+            "hooks": [{"text": "Ojo"}],
+        })
+        with pytest.raises(EnhancementError, match="anchor"):
+            validate_edit_spec(spec)
+
+    def test_captions_hooks_not_list(self):
+        """hooks no-lista → error."""
+        from voxera.autopilot import validate_edit_spec
+        spec = _canonical_spec(captions={
+            "enabled": True, "style": "karaoke", "text_style": "classic",
+            "hooks": {"text": "Ojo", "anchor": "Hola"},
+        })
+        with pytest.raises(EnhancementError, match="hooks debe ser lista"):
+            validate_edit_spec(spec)
+
+    def test_captions_hooks_bad_dur(self):
+        """dur no numérico → error."""
+        from voxera.autopilot import validate_edit_spec
+        spec = _canonical_spec(captions={
+            "enabled": True, "style": "karaoke", "text_style": "classic",
+            "hooks": [{"text": "Ojo", "anchor": "Hola", "dur": "largo"}],
+        })
+        with pytest.raises(EnhancementError, match="dur"):
+            validate_edit_spec(spec)
+
+    def test_captions_bad_es_variant(self):
+        """es_variant inválido → error."""
+        from voxera.autopilot import validate_edit_spec
+        spec = _canonical_spec(captions={
+            "enabled": True, "style": "karaoke", "text_style": "classic",
+            "es_variant": "es-MX",
+        })
+        with pytest.raises(EnhancementError, match="es_variant"):
+            validate_edit_spec(spec)
+
+    def test_captions_strict_qa_bool(self):
+        """strict_qa no bool → error; bool → ok."""
+        from voxera.autopilot import validate_edit_spec
+        bad = _canonical_spec(captions={
+            "enabled": True, "style": "karaoke", "text_style": "classic",
+            "strict_qa": "yes",
+        })
+        with pytest.raises(EnhancementError, match="strict_qa"):
+            validate_edit_spec(bad)
+        ok = _canonical_spec(captions={
+            "enabled": True, "style": "karaoke", "text_style": "classic",
+            "strict_qa": True,
+        })
+        assert validate_edit_spec(ok)["captions"]["strict_qa"] is True
+
     def test_empty_effects_is_ok(self):
         from voxera.autopilot import validate_edit_spec
         spec = _canonical_spec(effects=[])
@@ -421,6 +496,38 @@ class TestIntegrationAB:
         assert ab_manifest["variants"]["llm"]["qa"]
         # No crash
         assert len(ab_manifest["checklist"]) == 4
+
+
+class TestExecuteSpecHooks:
+    """execute_spec con hooks en el spec → los hooks llegan a captions."""
+
+    def test_captions_hooks_pass_through(self, tmp_path):
+        """El stage captions registra los hooks y el es_variant en el manifest."""
+        from voxera.autopilot import execute_spec, validate_edit_spec
+        src = _create_test_video(tmp_path / "src.mp4", duration=4.0)
+        words_path = tmp_path / "words.json"
+        words_path.write_text(
+            json.dumps({"words": _words_for_4s()}),
+            encoding="utf-8",
+        )
+        spec = validate_edit_spec(_canonical_spec(captions={
+            "enabled": True,
+            "style": "karaoke",
+            "text_style": "classic",
+            "highlight": [],
+            "hooks": [{"text": "¿LO SABÍAS?", "anchor": "Hola", "dur": 0.9}],
+            "es_variant": "es-ES",
+        }))
+        out = tmp_path / "out.mp4"
+        stages = execute_spec(
+            spec, str(src), str(out),
+            words_json=str(words_path),
+        )
+        captions_stage = next(s for s in stages if s["stage"] == "captions")
+        assert captions_stage["ok"] is True
+        assert captions_stage["args"]["hooks"] == 1
+        assert captions_stage["args"]["es_variant"] == "es-ES"
+        assert out.exists()
 
 
 # ===================================================================

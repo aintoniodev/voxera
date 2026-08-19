@@ -274,6 +274,41 @@ def validate_edit_spec(spec: dict) -> dict:
         if not isinstance(hl, list):
             raise EnhancementError("edit-spec captions.highlight debe ser lista")
         captions["highlight"] = hl
+        # hooks: lista de {text, anchor, dur?} — texto de pantalla arriba
+        # (≤4 palabras, 0.8–2.0 s, anclado a una palabra del transcript).
+        # Los límites finales los impone captions.resolve_hooks al quemar;
+        # aquí solo se valida el contrato del JSON.
+        hooks = captions.get("hooks", [])
+        if not isinstance(hooks, list):
+            raise EnhancementError("edit-spec captions.hooks debe ser lista")
+        for i, h in enumerate(hooks):
+            if not isinstance(h, dict):
+                raise EnhancementError(f"edit-spec captions.hooks[{i}] debe ser dict")
+            for key in ("text", "anchor"):
+                if key not in h:
+                    raise EnhancementError(f"edit-spec captions.hooks[{i}] falta '{key}'")
+            if not isinstance(h["text"], str) or not h["text"].strip():
+                raise EnhancementError(
+                    f"edit-spec captions.hooks[{i}].text debe ser str no vacío"
+                )
+            if not isinstance(h["anchor"], str) or not h["anchor"].strip():
+                raise EnhancementError(
+                    f"edit-spec captions.hooks[{i}].anchor debe ser str no vacío "
+                    "(palabra del transcript)"
+                )
+            if "dur" in h and (not _is_num(h["dur"]) or h["dur"] <= 0):
+                raise EnhancementError(
+                    f"edit-spec captions.hooks[{i}].dur debe ser num > 0"
+                )
+        captions["hooks"] = hooks
+        ev = captions.get("es_variant")
+        if ev is not None and ev not in ("es-ES", "es-LATAM"):
+            raise EnhancementError(
+                "edit-spec captions.es_variant debe ser 'es-ES', 'es-LATAM' o null"
+            )
+        sq = captions.get("strict_qa")
+        if sq is not None and not _is_bool(sq):
+            raise EnhancementError("edit-spec captions.strict_qa debe ser bool o null")
     spec["captions"] = captions
 
     # target
@@ -659,6 +694,7 @@ def execute_spec(
             try:
                 from voxera.captions import captions_video
                 highlight = tuple(captions_cfg.get("highlight", []))
+                hooks = captions_cfg.get("hooks") or None
                 captions_video(
                     current, str(out),
                     words_json=words_json,
@@ -666,6 +702,9 @@ def execute_spec(
                     style=captions_cfg.get("style", "karaoke"),
                     text_style=captions_cfg.get("text_style", "classic"),
                     highlight=highlight,
+                    hooks=hooks,
+                    es_variant=captions_cfg.get("es_variant"),
+                    strict_qa=captions_cfg.get("strict_qa", False),
                     crf=spec.get("target", {}).get("crf", 18),
                 )
                 dur = time.monotonic() - t0
@@ -675,6 +714,8 @@ def execute_spec(
                     "args": {
                         "style": captions_cfg.get("style"),
                         "text_style": captions_cfg.get("text_style"),
+                        "hooks": len(hooks) if hooks else 0,
+                        "es_variant": captions_cfg.get("es_variant"),
                     },
                     "ok": True,
                     "dur": dur,

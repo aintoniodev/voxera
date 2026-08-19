@@ -52,10 +52,33 @@ genera `PREFIX.ab_manifest.json` con checklist de publicación.
   "effects": [
     {"cmd": "audio riser", "args": {"mood": "tension", "hit": 31.2}}
   ],
-  "captions": {"enabled": true, "style": "karaoke", "text_style": "classic", "highlight": []},
+  "captions": {
+    "enabled": true,
+    "style": "karaoke",
+    "text_style": "classic",
+    "highlight": [],
+    "hooks": [
+      {"text": "¿LO SABÍAS?", "anchor": "clave", "dur": 0.9},
+      {"text": "PERO OJO", "anchor": "trampa"}
+    ],
+    "es_variant": "es-ES",
+    "strict_qa": false
+  },
   "target": {"aspect": "9:16", "max_dur": 45, "crf": 18}
 }
 ```
+
+### captions (keys opcionales)
+
+- `hooks` — lista de `{"text", "anchor", "dur"?}`: texto de pantalla arriba
+  (≤4 palabras, 0.8–2.0 s, MAYÚSCULAS, fade), sincronizado a la palabra `anchor`
+  del transcript (Síntesis Theme 5; ver `voxera-captions`). `dur` opcional, se
+  clampa a [0.8, 2.0]. Los hooks en conflicto (2 simultáneos o sobre un cue de
+  2+ líneas) se descartan con nota `QA:` — no rompen el burn-in.
+- `es_variant` — `"es-ES"` (decimales con coma) | `"es-LATAM"` (punto y hora
+  a. m./p. m.). El modo `playful` nunca elimina ¿/¡.
+- `strict_qa` — `true` aborta la edición si algún cue supera 20 cps (QA de
+  lectura, Síntesis §7 CAMBIO 1).
 
 ### Cmds permitidos en effects
 
@@ -72,7 +95,8 @@ genera `PREFIX.ab_manifest.json` con checklist de publicación.
 
 Validación: `validate_edit_spec()` rechaza version != 1, cmd desconocido, key de arg
 desconocida, valores malformados, keep_spans inválidos, hook type != "zoom-grow",
-captions sin keys requeridas, target.max_dur <= 0.
+captions sin keys requeridas, target.max_dur <= 0, hooks sin `text`/`anchor` o con
+`dur` no numérico, `es_variant` fuera de (es-ES, es-LATAM), `strict_qa` no bool.
 
 ## Pipeline stages
 
@@ -81,8 +105,10 @@ captions sin keys requeridas, target.max_dur <= 0.
 3. **effects** — Por cada effect en orden: riser (audio_tonal), lowpass (audio_lowpass),
    transition (audio_tonal), melody (audio_tonal). Cada uno extrae audio, aplica,
    y remuxea con ffmpeg. Genera S3, S4...
-4. **captions** — `captions.captions_video` con `words_json` y estilo del spec.
-   **Captions SIEMPRE van al final** sobre el timeline ya cortado (burn-in final).
+4. **captions** — `captions.captions_video` con `words_json` y estilo del spec,
+   pasando `hooks`, `es_variant` y `strict_qa` (el stage registra el nº de hooks
+   en el manifest). **Captions SIEMPRE van al final** sobre el timeline ya
+   cortado (burn-in final).
 
 ### Transcripción y timing de captions
 
