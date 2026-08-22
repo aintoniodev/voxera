@@ -60,3 +60,4 @@ demo/
 # estado local de tooling (Freebuff / agentes)
 .agents/
 .freebuff/
+ideas/

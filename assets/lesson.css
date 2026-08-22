@@ -1,0 +1,281 @@
+/* lesson.css — shared stylesheet for all lessons and reference documents.
+   Tufte-inspired: warm paper, serif body, wide margins, restrained color. */
+
+:root {
+  --paper: #fffff8;
+  --ink: #111;
+  --muted: #6a6a5e;
+  --rule: #d8d8cc;
+  --accent: #7f0019;   /* deep red */
+  --accent-soft: #f4e9e6;
+  --teal: #0f6b63;
+  --code-bg: #f4f4ee;
+  --card-bg: #fbfbf4;
+  --good: #1a6b32;
+  --bad: #9c1c1c;
+}
+
+* { box-sizing: border-box; }
+
+html { font-size: 17px; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: Georgia, "Iowan Old Style", "Charter", "Times New Roman", serif;
+  line-height: 1.55;
+  margin: 0;
+  padding: 0 1.25rem;
+}
+
+/* ---- layout: the measure ---- */
+main, .lesson-body {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 2.5rem 0 5rem;
+}
+
+/* ---- typography ---- */
+h1, h2, h3, h4 {
+  font-family: "Gill Sans", "Trebuchet MS", "Avenir Next", "Segoe UI", sans-serif;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+}
+
+h1 { font-size: 2.05rem; margin: 0 0 0.35rem; }
+h2 {
+  font-size: 1.35rem;
+  margin: 2.6rem 0 0.7rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--rule);
+}
+h3 { font-size: 1.1rem; margin: 1.8rem 0 0.45rem; }
+h4 { font-size: 1rem; margin: 1.4rem 0 0.35rem; }
+
+p { margin: 0.7rem 0; }
+strong { font-weight: 700; }
+em { font-style: italic; }
+
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+a:hover { color: var(--teal); }
+
+ul, ol { margin: 0.6rem 0 0.9rem; padding-left: 1.4rem; }
+li { margin: 0.28rem 0; }
+
+blockquote {
+  margin: 1.2rem 0;
+  padding: 0.4rem 1.2rem;
+  border-left: 3px solid var(--accent);
+  color: #333;
+  font-style: italic;
+}
+
+code, pre, kbd, samp {
+  font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
+  font-size: 0.86em;
+}
+code { background: var(--code-bg); padding: 0.12em 0.35em; border-radius: 3px; }
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  padding: 0.85rem 1rem;
+  overflow-x: auto;
+  line-height: 1.45;
+}
+pre code { background: none; padding: 0; }
+
+/* ---- lesson header ---- */
+.lesson-meta {
+  font-family: "Gill Sans", "Trebuchet MS", "Segoe UI", sans-serif;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+}
+.lesson-meta .num { color: var(--accent); font-weight: 700; }
+.lede {
+  font-size: 1.12rem;
+  color: #333;
+  margin: 0.9rem 0 1.6rem;
+}
+
+/* ---- tables ---- */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1.1rem 0;
+  font-size: 0.92rem;
+}
+th, td {
+  border: 1px solid var(--rule);
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  font-family: "Gill Sans", "Trebuchet MS", "Segoe UI", sans-serif;
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: var(--card-bg);
+}
+tbody tr:nth-child(even) { background: #fdfcf4; }
+
+/* ---- cards & callouts ---- */
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 0.9rem 1.15rem;
+  margin: 1.2rem 0;
+}
+.card p:first-child { margin-top: 0; }
+.card p:last-child { margin-bottom: 0; }
+
+.callout {
+  border-left: 3px solid var(--teal);
+  background: #f0f7f5;
+  padding: 0.6rem 1rem;
+  margin: 1.2rem 0;
+  border-radius: 0 5px 5px 0;
+}
+.callout .label {
+  font-family: "Gill Sans", "Trebuchet MS", "Segoe UI", sans-serif;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--teal);
+  font-weight: 700;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.punchline {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-align: center;
+  margin: 1.4rem 0;
+}
+
+/* ---- the loop diagram ---- */
+.loop {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: center;
+  margin: 1.4rem 0;
+  font-family: "Gill Sans", "Trebuchet MS", "Segoe UI", sans-serif;
+}
+.loop .step {
+  background: var(--card-bg);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 0.45rem 1.1rem;
+  min-width: 20rem;
+  text-align: center;
+  font-size: 0.95rem;
+}
+.loop .step .tag {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.loop .step b { color: var(--accent); }
+.loop .arrow { color: var(--muted); font-size: 0.85rem; line-height: 1; }
+
+/* ---- buttons ---- */
+.btn {
+  font-family: "Gill Sans", "Trebuchet MS", "Segoe UI", sans-serif;
+  font-size: 0.88rem;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  padding: 0.35rem 0.8rem;
+  cursor: pointer;
+  color: var(--ink);
+}
+.btn:hover { background: var(--card-bg); }
+.btn.active, .btn:active { background: var(--ink); color: var(--paper); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+
+/* ---- quiz ---- */
+.quiz { margin: 1.2rem 0; }
+.quiz-q {
+  background: var(--card-bg);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 1rem 1.2rem;
+  margin: 1rem 0;
+}
+.quiz-q .qtext { font-weight: 700; margin-bottom: 0.6rem; }
+.quiz-q .opt {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: Georgia, serif;
+  font-size: 0.95rem;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 0.45rem 0.7rem;
+  margin: 0.35rem 0;
+  cursor: pointer;
+}
+.quiz-q .opt:hover:not(:disabled) { border-color: var(--accent); }
+.quiz-q .opt.correct { background: #e3f1e6; border-color: var(--good); color: var(--good); }
+.quiz-q .opt.wrong { background: #fbe7e5; border-color: var(--bad); color: var(--bad); }
+.quiz-q .opt:disabled { cursor: default; }
+.quiz-q .explain {
+  display: none;
+  margin-top: 0.6rem;
+  font-size: 0.92rem;
+  border-top: 1px dashed var(--rule);
+  padding-top: 0.5rem;
+}
+.quiz-q .explain.show { display: block; }
+.quiz-q .explain b { color: var(--teal); }
+.quiz-score {
+  font-family: "Gill Sans", "Trebuchet MS", "Segoe UI", sans-serif;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+/* ---- reveal / exercise ---- */
+details.reveal {
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  margin: 0.9rem 0;
+  background: var(--card-bg);
+}
+details.reveal summary {
+  cursor: pointer;
+  padding: 0.55rem 1rem;
+  font-family: "Gill Sans", "Trebuchet MS", "Segoe UI", sans-serif;
+  font-size: 0.9rem;
+  color: var(--accent);
+}
+details.reveal .inner { padding: 0 1rem 0.9rem; }
+
+/* ---- footer ---- */
+.lesson-foot {
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+/* ---- print ---- */
+@media print {
+  html { font-size: 11.5pt; }
+  body { background: #fff; }
+  .no-print { display: none !important; }
+  h2 { page-break-after: avoid; }
+  table, .card, .quiz-q { page-break-inside: avoid; }
+  a { color: var(--ink); text-decoration: none; }
+}

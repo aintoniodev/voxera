@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reference · The Evolutionary Loop</title>
+<!--
+  Self-contained reference. The stylesheet below is an inlined copy of the
+  canonical component assets/lesson.css. When you edit the component,
+  re-inline it here.
+-->
+<style>
+:root {
+  --paper: #fffff8;
+  --ink: #111;
+  --muted: #6a6a5e;
+  --rule: #d8d8cc;
+  --accent: #7f0019;
+  --teal: #0f6b63;
+  --code-bg: #f4f4ee;
+  --card-bg: #fbfbf4;
+}
+* { box-sizing: border-box; }
+html { font-size: 17px; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: Georgia, "Iowan Old Style", "Charter", "Times New Roman", serif;
+  line-height: 1.55;
+  margin: 0;
+  padding: 0 1.25rem;
+}
+main {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 2.5rem 0 5rem;
+}
+h1, h2, h3, h4 {
+  font-family: "Gill Sans", "Trebuchet MS", "Avenir Next", "Segoe UI", sans-serif;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+}
+h1 { font-size: 2.05rem; margin: 0 0 0.35rem; }
+h2 {
+  font-size: 1.35rem;
+  margin: 2.6rem 0 0.7rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--rule);
+}
+p { margin: 0.7rem 0; }
+strong { font-weight: 700; }
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+a:hover { color: var(--teal); }
+ul, ol { margin: 0.6rem 0 0.9rem; padding-left: 1.4rem; }
+li { margin: 0.28rem 0; }
+code {
+  font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
+  font-size: 0.86em;
+  background: var(--code-bg);
+  padding: 0.12em 0.35em;
+  border-radius: 3px;
+}
+.lesson-meta {
+  font-family: "Gill Sans", "Trebuchet MS", "Segoe UI", sans-serif;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+}
+.lede {
+  font-size: 1.12rem;
+  color: #333;
+  margin: 0.9rem 0 1.6rem;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1.1rem 0;
+  font-size: 0.92rem;
+}
+th, td {
+  border: 1px solid var(--rule);
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  font-family: "Gill Sans", "Trebuchet MS", "Segoe UI", sans-serif;
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: var(--card-bg);
+}
+tbody tr:nth-child(even) { background: #fdfcf4; }
+dl { margin: 0.8rem 0; }
+dt { margin-top: 0.8rem; }
+dd { margin: 0.15rem 0 0 0; }
+.callout {
+  border-left: 3px solid var(--teal);
+  background: #f0f7f5;
+  padding: 0.6rem 1rem;
+  margin: 1.2rem 0;
+  border-radius: 0 5px 5px 0;
+}
+.callout .label {
+  font-family: "Gill Sans", "Trebuchet MS", "Segoe UI", sans-serif;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--teal);
+  font-weight: 700;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+.punchline {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-align: center;
+  margin: 1.4rem 0;
+}
+.loop {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: center;
+  margin: 1.4rem 0;
+  font-family: "Gill Sans", "Trebuchet MS", "Segoe UI", sans-serif;
+}
+.loop .step {
+  background: var(--card-bg);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 0.45rem 1.1rem;
+  min-width: 20rem;
+  max-width: 100%;
+  text-align: center;
+  font-size: 0.95rem;
+}
+.loop .step .tag {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.loop .step b { color: var(--accent); }
+.loop .arrow { color: var(--muted); font-size: 0.85rem; line-height: 1; }
+.lesson-foot {
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+@media print {
+  html { font-size: 11.5pt; }
+  body { background: #fff; }
+  h2 { page-break-after: avoid; }
+  table { page-break-inside: avoid; }
+  a { color: var(--ink); text-decoration: none; }
+}
+</style>
+</head>
+<body>
+<main>
+
+<div class="lesson-meta">Reference · Cheatsheet &amp; Glossary</div>
+<h1>The Evolutionary Loop</h1>
+<p class="lede">Every evolutionary algorithm is the same four-step loop. Only the <em>slots</em> change: what an individual is, what counts as variation, what measures fitness, and how selection keeps or discards. Print this page; it is the map for the whole course.</p>
+
+<h2>The loop</h2>
+<div class="loop">
+  <div class="step"><span class="tag">1 · Population</span>A set of <b>individuals</b> — candidate solutions</div>
+  <div class="arrow">▼</div>
+  <div class="step"><span class="tag">2 · Variation</span><b>Mutation</b> (one parent → one child) &amp; <b>crossover</b> (two parents → children)</div>
+  <div class="arrow">▼</div>
+  <div class="step"><span class="tag">3 · Evaluation</span><b>Fitness function</b> scores each individual</div>
+  <div class="arrow">▼</div>
+  <div class="step"><span class="tag">4 · Selection &amp; heredity</span>Fitter individuals <b>survive and reproduce</b>; the rest are discarded</div>
+  <div class="arrow">▲ repeat ▲</div>
+  <div class="step"><span class="tag">0 · Repeat</span>Winners become the parents of the next generation</div>
+</div>
+
+<div class="callout">
+<span class="label">The one-line summary</span>
+<p>Evolution = <b>variation</b> (make new candidates from old ones) + <b>selection</b> (keep the better ones) + <b>heredity</b> (what you keep is what you build from next). Everything else — trees, networks, architectures, code — is a choice of what the individuals are.</p>
+</div>
+
+<h2>What fills the slots in real systems</h2>
+<table>
+<thead>
+<tr><th>System</th><th>Individual</th><th>Variation</th><th>Fitness</th><th>Selection / heredity</th></tr>
+</thead>
+<tbody>
+<tr>
+  <td><b>Classic GP</b> (Koza 1992)</td>
+  <td>program tree (s-expression)</td>
+  <td>subtree mutation &amp; subtree crossover</td>
+  <td>program's performance on the task</td>
+  <td>tournament / fitness-proportionate; winners reproduce</td>
+</tr>
+<tr>
+  <td><b>NEAT</b> (Stanley &amp; Miikkulainen 2002)</td>
+  <td>neural net: topology + weights</td>
+  <td>add node/link mutations, weight perturbation; crossover via innovation numbers</td>
+  <td>task score (e.g. game reward)</td>
+  <td>speciation + fitness sharing (protects new structures)</td>
+</tr>
+<tr>
+  <td><b>ES</b> (Salimans et al. 2017)</td>
+  <td>whole weight vector θ</td>
+  <td>θ + σ·ε, Gaussian perturbations</td>
+  <td>episode return of the policy</td>
+  <td>weighted recombination: move θ toward the best perturbations</td>
+</tr>
+<tr>
+  <td><b>Regularized evolution</b> (Real et al. 2019, AmoebaNet)</td>
+  <td>CNN architecture (cell graph)</td>
+  <td>mutate cell ops / edges</td>
+  <td>validation accuracy after short training</td>
+  <td>tournament selection with an <b>age penalty</b> (prefer younger)</td>
+</tr>
+<tr>
+  <td><b>FunSearch</b> (Romera-Paredes et al. 2024)</td>
+  <td>a program (Python function)</td>
+  <td>LLM prompted to improve the program; sampling</td>
+  <td>evaluator score on test cases</td>
+  <td>top scorers kept (hall of fame) and fed back to the LLM</td>
+</tr>
+<tr>
+  <td><b>autoresearch</b> (Karpathy 2026)</td>
+  <td>a version of <code>train.py</code></td>
+  <td>agent edits the code (LLM mutation)</td>
+  <td><code>val_bpb</code> after fixed 5-min budget</td>
+  <td>keep the commit if lower; <code>git reset</code> if not — population of 1</td>
+</tr>
+</tbody>
+</table>
+
+<div class="punchline">autoresearch = (1+1)-ES with an LLM as the mutation operator</div>
+
+<h2>Glossary</h2>
+<dl>
+<dt><strong>Individual / candidate</strong></dt><dd>One solution in the population — a program, a network, a weight vector, a commit of training code.</dd>
+<dt><strong>Population</strong></dt><dd>The set of individuals alive at one time. Size is the main knob between "careful hill-climbing" (small) and "broad exploration" (large).</dd>
+<dt><strong>Generation</strong></dt><dd>One pass through the loop: vary → evaluate → select → the new population.</dd>
+<dt><strong>Fitness function</strong></dt><dd>The objective score of an individual. Must be cheap enough to call many times — it is the bottleneck of almost every evolutionary system.</dd>
+<dt><strong>Variation / variation operators</strong></dt><dd>Anything that produces a new individual from old ones. Two classics: <em>mutation</em> (one parent → one child, small random change) and <em>crossover / recombination</em> (two parents → children, mixing parts). In LLM-based systems the variation operator is a prompted language model.</dd>
+<dt><strong>Selection</strong></dt><dd>The rule deciding who survives and who reproduces. Tournament selection (pick the best of k random), elitism (always keep the top few), fitness-proportionate, rank-based.</dd>
+<dt><strong>Heredity</strong></dt><dd>The fact that survivors' traits are inherited by the next generation. Without heredity you have random search; without selection you have random drift.</dd>
+<dt><strong>Elitism</strong></dt><dd>Copying the best individual(s) unchanged into the next generation, so the best-so-far is never lost.</dd>
+<dt><strong>(1+1)-ES</strong></dt><dd>Population of one: mutate the current solution, keep it if better, else revert. Aka hill climbing with a stochastic step. The minimal evolutionary algorithm.</dd>
+<dt><strong>Exploration vs exploitation</strong></dt><dd>Exploration = trying far-flung variants; exploitation = refining what already works. High mutation = explore; low mutation = exploit. Crossover and larger populations add exploration; elitism adds exploitation.</dd>
+<dt><strong>Local optimum</strong></dt><dd>A solution better than its immediate neighbours but worse than the global best. Hill climbing gets stuck here; populations and crossover are the classic escape routes.</dd>
+<dt><strong>Genetic drift</strong></dt><dd>Change in the population from chance, not fitness. With weak selection pressure, drift dominates and progress stalls.</dd>
+<dt><strong>Hall of fame</strong></dt><dd>An archive of the best individuals found so far, kept outside the population (used by FunSearch).</dd>
+<dt><strong>Age / regularized evolution</strong></dt><dd>Penalizing old individuals in selection so young ones get a chance — prevents the search from freezing on an early winner (Real et al. 2019).</dd>
+<dt><strong>Innovation number</strong></dt><dd>NEAT's global counter tagging each structural gene so crossover can align matching parts of two different topologies.</dd>
+<dt><strong>Speciation</strong></dt><dd>Dividing the population into niches of similar individuals, with fitness shared within a niche — protects novel structures long enough to be evaluated (NEAT).</dd>
+<dt><strong>Genotype / phenotype</strong></dt><dd>Genotype = the representation evolution acts on (code, weights, graph); phenotype = what gets evaluated (behavior, trained model). One genotype can map to many phenotypes.</dd>
+</dl>
+
+<h2>Links</h2>
+<ul>
+  <li><a href="../lessons/0001-the-evolutionary-loop.html">Lesson 1 · The Evolutionary Loop</a> — build the intuition with the simulator.</li>
+  <li><a href="../RESOURCES.md">RESOURCES.md</a> — verified sources for everything above.</li>
+</ul>
+
+<div class="lesson-foot">Reference for the course <em>Genetic Programming for Autonomous ML Research</em> · ask your agent (me) about anything on this page.</div>
+
+</main>
+</body>
+</html>
